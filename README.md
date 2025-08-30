@@ -2,6 +2,15 @@
 
 Dynamic multi-monitor wallpaper with masonry layout and auto-scroll for Wayland/Hyprland.
 
+## 🎬 Demo
+
+### Video Demonstration
+https://github.com/Kalytheos/Wallpin/assets/docs/media/show.mp4
+
+### Screenshot
+![WallPin Screenshot](docs/media/captura.png)
+
+### Preview Gallery
 ![WallPin Preview](assets/preview.png)
 
 ## ✨ Features
