@@ -8,7 +8,7 @@ Dynamic multi-monitor wallpaper with masonry layout and auto-scroll for Wayland/
 ![WallPin Demo](docs/media/demo.gif)
 
 ### Video Demonstration
-https://github.com/Kalytheos/Wallpin/assets/docs/media/show.mp4
+https://github.com/Kalytheos/Wallpin/docs/media/show.mp4
 
 ### Screenshot
 ![WallPin Screenshot](docs/media/captura.png)
