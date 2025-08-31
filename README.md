@@ -203,6 +203,65 @@ Then recompile:
 make clean && make wallpaper
 ```
 
+## 🎲 Image Shuffling
+
+WallPin includes scripts to change the order in which images are displayed without modifying the program itself:
+
+### Advanced Shuffling (shuffle-wallpapers.sh)
+
+```bash
+# Show all available options
+./shuffle-wallpapers.sh help
+
+# Reverse order (first becomes last, last becomes first)
+./shuffle-wallpapers.sh reverse
+
+# Random order (reproducible based on current date)
+./shuffle-wallpapers.sh random
+
+# Swap chunks of 50 images
+./shuffle-wallpapers.sh chunks
+
+# Interleave even/odd images
+./shuffle-wallpapers.sh interleave
+
+# Create backup without shuffling
+./shuffle-wallpapers.sh backup
+
+# Restore original order
+./shuffle-wallpapers.sh restore
+```
+
+### Quick Shuffle (quick-shuffle.sh)
+
+```bash
+# Simple reverse order (swap first ↔ last)
+./quick-shuffle.sh
+```
+
+**Features:**
+- ✅ **Automatic backup**: Creates backup before any change
+- ✅ **Preserve extensions**: Maintains .jpg, .png, .jpeg correctly
+- ✅ **Smart detection**: Handles wall_XXX and wallpaper_XXX patterns
+- ✅ **Easy restore**: Return to original order anytime
+- ✅ **Multiple strategies**: Different shuffling algorithms
+- ✅ **Progress tracking**: Shows progress for large collections
+
+**Example workflow:**
+```bash
+# 1. Try reverse order
+./shuffle-wallpapers.sh reverse
+
+# 2. Test your wallpaper (images now show in reverse)
+./hyprwall-multi.sh restart-all
+
+# 3. Try random if you want more variety
+./shuffle-wallpapers.sh random
+
+# 4. Go back to original if needed
+./shuffle-wallpapers.sh restore
+```
+
 ### Auto-scroll Settings
 
 Modify in `src/main_wallpaper.c`:
