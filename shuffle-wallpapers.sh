@@ -107,10 +107,11 @@ generate_new_name() {
             new_number=$((total - index + 1))
             ;;
         "random")
-            # Usar fecha como semilla para reproducibilidad
+            # Crear un hash único basado en el nombre del archivo original y fecha
             local seed=$(date +%Y%m%d)
-            new_number=$(echo "$index$seed" | md5sum | tr -d -c 0-9 | cut -c1-3)
-            new_number=$((new_number % total + 1))
+            local hash=$(echo "$basename$seed" | md5sum | tr -d -c 0-9)
+            # Usar el índice como base y el hash como desplazamiento para evitar duplicados
+            new_number=$(( (index + ${hash:0:6}) % total + 1 ))
             ;;
         "chunks")
             local chunk_size=50
@@ -152,10 +153,62 @@ reorganize_images() {
     
     echo -e "${BLUE}🔄 Reorganizando imágenes...${NC}"
     
-    # Generar mapeo y mover a temporal
+    # Crear array de nuevos índices según estrategia
+    local new_indices=()
+    for i in $(seq 1 $total); do
+        case "$strategy" in
+            "reverse")
+                new_indices[i]=$((total - i + 1))
+                ;;
+            "random")
+                # Para random, creamos una lista y la mezclamos
+                new_indices[i]=$i
+                ;;
+            "chunks")
+                local chunk_size=50
+                local chunk_num=$(((i-1) / chunk_size))
+                local pos_in_chunk=$(((i-1) % chunk_size))
+                local total_chunks=$(((total + chunk_size - 1) / chunk_size))
+                local new_chunk=$(((chunk_num + total_chunks / 2) % total_chunks))
+                new_indices[i]=$((new_chunk * chunk_size + pos_in_chunk + 1))
+                ;;
+            "interleave")
+                if [ $(((i-1) % 2)) -eq 0 ]; then
+                    new_indices[i]=$(((((i-1) / 2) + (total / 2)) % total + 1))
+                else
+                    new_indices[i]=$((((i-1) / 2) + 1))
+                fi
+                ;;
+        esac
+    done
+    
+    # Para random, mezclamos el array
+    if [ "$strategy" = "random" ]; then
+        local seed=$(date +%Y%m%d)
+        local shuffled=($(for i in $(seq 1 $total); do echo "$i"; done | shuf --random-source=<(echo $seed)))
+        for i in $(seq 1 $total); do
+            new_indices[i]=${shuffled[$((i-1))]}
+        done
+    fi
+    
+    # Copiar archivos con nuevos nombres
     for i in "${!images[@]}"; do
         local old_file="${images[$i]}"
-        local new_name=$(generate_new_name "$strategy" "$old_file" $((i + 1)) "$total")
+        local basename=$(basename "$old_file")
+        local extension="${basename##*.}"
+        local prefix=""
+        
+        # Detectar prefijo
+        if [[ "$basename" =~ ^wall_ ]]; then
+            prefix="wall_"
+        elif [[ "$basename" =~ ^wallpaper_ ]]; then
+            prefix="wallpaper_"
+        else
+            prefix="wall_"
+        fi
+        
+        local new_index=${new_indices[$((i + 1))]}
+        local new_name=$(printf "%s%03d.%s" "$prefix" "$new_index" "$extension")
         local new_path="$temp_dir/$new_name"
         
         cp "$old_file" "$new_path"
@@ -166,16 +219,32 @@ reorganize_images() {
         fi
     done
     
+    # Verificar que se copiaron todos los archivos
+    local copied_count=$(ls "$temp_dir" | wc -l)
+    if [ "$copied_count" -ne "$total" ]; then
+        echo -e "${RED}❌ Error: Se copiaron $copied_count archivos pero esperaba $total${NC}"
+        echo -e "${YELLOW}🔄 Limpiando directorio temporal y abortando...${NC}"
+        rm -rf "$temp_dir"
+        return 1
+    fi
+    
     # Limpiar directorio original y mover desde temporal
     rm -f "$ASSETS_DIR"/*.jpg "$ASSETS_DIR"/*.jpeg "$ASSETS_DIR"/*.png 2>/dev/null || true
     mv "$temp_dir"/* "$ASSETS_DIR"/
     rmdir "$temp_dir"
     
+    # Verificación final
+    local final_count=$(ls "$ASSETS_DIR" | wc -l)
     echo -e "${GREEN}✅ Reorganización completada${NC}"
     echo -e "${BLUE}📈 Resumen:${NC}"
     echo -e "   - Estrategia: $strategy"
-    echo -e "   - Imágenes procesadas: $total"
+    echo -e "   - Imágenes originales: $total"
+    echo -e "   - Imágenes finales: $final_count"
     echo -e "   - Backup disponible en: $BACKUP_DIR"
+    
+    if [ "$final_count" -ne "$total" ]; then
+        echo -e "${YELLOW}⚠️  Advertencia: El número final de archivos no coincide${NC}"
+    fi
 }
 
 # Verificar que estamos en el directorio correcto
