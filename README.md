@@ -26,6 +26,8 @@ https://github.com/Kalytheos/Wallpin/docs/media/show.mp4
 - 🪟 **Dual Modes**: Regular window application or wallpaper background
 - ⚡ **GTK4 + Layer Shell**: Native Wayland/Hyprland integration
 - 🎯 **Optimized**: Efficient image loading with per-instance state management
+- 🎲 **Image Shuffling**: Multiple strategies to reorder wallpaper display (NEW!)
+- 🔧 **Image Normalization**: Standardize inconsistent file naming (NEW!)
 
 ## 🖥️ Multi-Monitor Support
 
@@ -453,6 +455,19 @@ MIT License - see LICENSE file for details
 ---
 
 ## 🆕 Changelog
+
+### v3.0.0 - Image Shuffling & Normalization
+- ✅ **Image shuffling scripts**: Multiple reordering strategies for visual variety
+  - `shuffle-wallpapers.sh`: Advanced shuffling with 4 strategies (reverse, random, chunks, interleave)
+  - `quick-shuffle.sh`: Simple one-command reverse shuffling
+- ✅ **Image normalization**: `normalize-images.sh` standardizes inconsistent naming
+  - Handles `wall_XXX`, `wallpaper_XXXX`, and mixed patterns
+  - Converts all to consistent `wall_001.ext` format
+- ✅ **Robust algorithms**: Fixed random strategy with Fisher-Yates algorithm
+- ✅ **Data safety**: Comprehensive backup systems and validation checks
+- ✅ **Preview mode**: See changes before applying them
+- ✅ **Error prevention**: Duplicate detection and file loss protection
+- ✅ **Documentation**: Complete SHUFFLING.md guide with examples
 
 ### v2.0.0 - Multi-Monitor Support
 - ✅ **Multi-monitor support**: Independent wallpapers on each monitor
