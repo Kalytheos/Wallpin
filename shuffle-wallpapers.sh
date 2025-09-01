@@ -184,10 +184,28 @@ reorganize_images() {
     
     # Para random, mezclamos el array
     if [ "$strategy" = "random" ]; then
+        # Usar una semilla basada en la fecha para reproducibilidad
         local seed=$(date +%Y%m%d)
-        local shuffled=($(for i in $(seq 1 $total); do echo "$i"; done | shuf --random-source=<(echo $seed)))
+        RANDOM="$seed"
+        
+        # Crear array con índices ordenados
+        local temp_indices=()
         for i in $(seq 1 $total); do
-            new_indices[i]=${shuffled[$((i-1))]}
+            temp_indices+=($i)
+        done
+        
+        # Algoritmo Fisher-Yates para mezclar
+        for ((i = total - 1; i > 0; i--)); do
+            local j=$((RANDOM % (i + 1)))
+            # Intercambiar elementos i y j
+            local temp=${temp_indices[i]}
+            temp_indices[i]=${temp_indices[j]}
+            temp_indices[j]=$temp
+        done
+        
+        # Copiar a new_indices (ajustando índices para bash)
+        for i in $(seq 1 $total); do
+            new_indices[i]=${temp_indices[$((i-1))]}
         done
     fi
     
@@ -196,20 +214,27 @@ reorganize_images() {
         local old_file="${images[$i]}"
         local basename=$(basename "$old_file")
         local extension="${basename##*.}"
-        local prefix=""
         
-        # Detectar prefijo
-        if [[ "$basename" =~ ^wall_ ]]; then
-            prefix="wall_"
-        elif [[ "$basename" =~ ^wallpaper_ ]]; then
-            prefix="wallpaper_"
-        else
-            prefix="wall_"
+        # Siempre usar formato wall_XXX estandarizado
+        local new_index=${new_indices[$((i + 1))]}
+        
+        # Verificar que new_index no esté vacío
+        if [ -z "$new_index" ] || [ "$new_index" -eq 0 ]; then
+            echo -e "${RED}❌ Error: Índice inválido para archivo $basename (índice: '$new_index')${NC}"
+            rm -rf "$temp_dir"
+            return 1
         fi
         
-        local new_index=${new_indices[$((i + 1))]}
-        local new_name=$(printf "%s%03d.%s" "$prefix" "$new_index" "$extension")
+        local new_name=$(printf "wall_%03d.%s" "$new_index" "$extension")
         local new_path="$temp_dir/$new_name"
+        
+        # Verificar que no exista ya un archivo con ese nombre en temporal
+        if [ -f "$new_path" ]; then
+            echo -e "${RED}❌ Error: Archivo duplicado detectado: $new_name${NC}"
+            echo -e "${YELLOW}   Archivo original: $basename → Nuevo: $new_name${NC}"
+            rm -rf "$temp_dir"
+            return 1
+        fi
         
         cp "$old_file" "$new_path"
         
