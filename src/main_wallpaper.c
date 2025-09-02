@@ -1,4 +1,10 @@
-// WallPin - Wallpaper Mode with Layer Shell
+// WallPin - Wallpape// Función para configurar FPS sin afectar la velocidad de scroll
+static void set_target_fps(int fps);
+
+// Función para inicializar valores por defecto
+static void init_scroll_config(void);
+
+// Variables para auto-scroll infinitode with Layer Shell
 
 #include <gtk/gtk.h>
 #include <dirent.h>
@@ -19,6 +25,9 @@ static void load_images_from_directory(GtkBox *container, const char *dir_path);
 static GtkWidget *create_rounded_image(const char *image_path, int target_width, int target_height);
 static void render_layout(GtkBox *container);
 
+// Función para configurar FPS sin afectar la velocidad
+static void set_target_fps(int fps);
+
 // Variables para auto-scroll infinito
 static GtkWidget *main_scroll_window = NULL;
 static GtkAdjustment *scroll_adjustment = NULL;
@@ -26,9 +35,18 @@ static guint scroll_timer_id = 0;
 static double current_scroll_position = 0.0;
 static gboolean auto_scroll_enabled = TRUE;
 
-// Configuración del auto-scroll para wallpaper (más lento)
-#define SCROLL_SPEED 0.3        // Velocidad más lenta para wallpaper (pixels por frame)
-#define SCROLL_INTERVAL 16      // Intervalo fijo en ms (16ms = ~60 FPS, NO afecta velocidad)
+// Variables configurables para FPS
+static int current_target_fps = 60;      // Valor por defecto
+static int current_scroll_interval = 16; // 60 FPS por defecto (1000/60)
+static double current_scroll_speed = 0.3; // Se calculará en base a SCROLL_SPEED_PER_SECOND
+
+// Configuración del auto-scroll para wallpaper
+#define SCROLL_SPEED_PER_SECOND 18.0  // Velocidad en pixels por segundo (independiente de FPS)
+#define TARGET_FPS 60                 // FPS deseados (60, 120, 144, 240, etc.)
+
+// Cálculos automáticos basados en TARGET_FPS
+#define SCROLL_INTERVAL (1000 / TARGET_FPS)                    // Intervalo en ms
+#define SCROLL_SPEED (SCROLL_SPEED_PER_SECOND / TARGET_FPS)    // Pixels por frame
 
 static GtkWidget *create_image_grid(void) {
     GtkWidget *container = gtk_box_new(GTK_ORIENTATION_VERTICAL, IMAGE_SPACING);
@@ -209,9 +227,9 @@ static gboolean auto_scroll_tick(G_GNUC_UNUSED gpointer user_data) {
         return G_SOURCE_CONTINUE;
     }
 
-    // Incrementar posición de scroll por SCROLL_SPEED pixels por frame
-    // SCROLL_INTERVAL controla la frecuencia de actualización (FPS), NO la velocidad
-    current_scroll_position += SCROLL_SPEED;
+    // Incrementar posición de scroll por current_scroll_speed pixels por frame
+    // La velocidad en pixels/segundo se mantiene constante independientemente de los FPS
+    current_scroll_position += current_scroll_speed;
 
     if (current_scroll_position >= max_scroll) {
         current_scroll_position = 0.0;
@@ -220,6 +238,40 @@ static gboolean auto_scroll_tick(G_GNUC_UNUSED gpointer user_data) {
     gtk_adjustment_set_value(scroll_adjustment, current_scroll_position);
 
     return G_SOURCE_CONTINUE;
+}
+
+// Función para inicializar valores por defecto de scroll
+static void init_scroll_config(void) {
+    current_target_fps = TARGET_FPS;
+    current_scroll_interval = SCROLL_INTERVAL;
+    current_scroll_speed = SCROLL_SPEED;
+}
+
+// Función para configurar FPS sin afectar la velocidad de scroll
+static void set_target_fps(int fps) {
+    if (fps < 30 || fps > 500) {
+        g_print("⚠️  FPS fuera de rango válido (30-500), usando %d\n", current_target_fps);
+        return;
+    }
+    
+    // Detener el timer actual si existe
+    if (scroll_timer_id > 0) {
+        g_source_remove(scroll_timer_id);
+        scroll_timer_id = 0;
+    }
+    
+    // Actualizar configuración
+    current_target_fps = fps;
+    current_scroll_interval = 1000 / fps;  // ms por frame
+    current_scroll_speed = SCROLL_SPEED_PER_SECOND / fps;  // pixels por frame
+    
+    // Reiniciar el timer con la nueva configuración
+    if (auto_scroll_enabled && scroll_adjustment) {
+        scroll_timer_id = g_timeout_add(current_scroll_interval, auto_scroll_tick, NULL);
+        g_print("🎯 FPS configurados a %d (intervalo: %dms, velocidad: %.3f px/frame)\n", 
+                current_target_fps, current_scroll_interval, current_scroll_speed);
+        g_print("📈 Velocidad constante: %.1f pixels/segundo\n", SCROLL_SPEED_PER_SECOND);
+    }
 }
 
 // Bloquear eventos de scroll del usuario
@@ -278,14 +330,17 @@ static void setup_infinite_scroll(GtkWidget *scroll_window) {
         g_source_remove(scroll_timer_id);
     }
 
-    scroll_timer_id = g_timeout_add(SCROLL_INTERVAL, auto_scroll_tick, NULL);
+    scroll_timer_id = g_timeout_add(current_scroll_interval, auto_scroll_tick, NULL);
 
-    g_print("Wallpaper auto-scroll iniciado (velocidad: %.1f px/frame, intervalo: %d ms)\n", SCROLL_SPEED, SCROLL_INTERVAL);
+    g_print("🚀 Wallpaper auto-scroll iniciado:\n");
+    g_print("   FPS: %d | Intervalo: %dms | Velocidad: %.1f px/s\n", 
+            current_target_fps, current_scroll_interval, SCROLL_SPEED_PER_SECOND);
 }
 
 // Estructura para pasar datos a la función activate
 typedef struct {
     const char *monitor_name;
+    int target_fps;
 } AppData;
 
 static void activate(GtkApplication *app, gpointer user_data) {
@@ -336,6 +391,11 @@ static void activate(GtkApplication *app, gpointer user_data) {
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), grid);
     load_images_from_directory(GTK_BOX(grid), ASSETS_DIR);
 
+    // Configurar FPS si se especificó
+    if (data && data->target_fps > 0) {
+        set_target_fps(data->target_fps);
+    }
+
     setup_infinite_scroll(scroll);
 
     gtk_window_present(GTK_WINDOW(window));
@@ -355,7 +415,10 @@ static void cleanup_auto_scroll(void) {
 int main(int argc, char **argv) {
     GtkApplication *app;
     int status;
-    AppData app_data = {NULL};
+    AppData app_data = {NULL, 0};
+    
+    // Inicializar configuración de scroll
+    init_scroll_config();
     
     // Procesar argumentos ANTES de crear la aplicación GTK
     int gtk_argc = 1;  // Solo argv[0] para GTK
@@ -375,16 +438,35 @@ int main(int argc, char **argv) {
                 free(gtk_argv);
                 return 1;
             }
+        } else if (strcmp(argv[i], "--fps") == 0 || strcmp(argv[i], "-f") == 0) {
+            if (i + 1 < argc) {
+                int fps = atoi(argv[i + 1]);
+                if (fps >= 30 && fps <= 500) {
+                    app_data.target_fps = fps;
+                    i++; // Saltar el siguiente argumento
+                } else {
+                    g_print("Error: FPS debe estar entre 30 y 500\n");
+                    free(gtk_argv);
+                    return 1;
+                }
+            } else {
+                g_print("Error: --fps requiere un valor numérico\n");
+                free(gtk_argv);
+                return 1;
+            }
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             g_print("WallPin Wallpaper Mode\n");
             g_print("Uso: %s [opciones]\n", argv[0]);
             g_print("Opciones:\n");
             g_print("  --monitor, -m <nombre>  Especificar monitor (ej: HDMI-A-1, eDP-1)\n");
+            g_print("  --fps, -f <número>      Configurar FPS (30-500, por defecto: %d)\n", TARGET_FPS);
             g_print("  --help, -h              Mostrar esta ayuda\n");
             g_print("\nEjemplos:\n");
-            g_print("  %s                      # Monitor por defecto\n", argv[0]);
-            g_print("  %s -m HDMI-A-1          # Monitor HDMI principal\n", argv[0]);
-            g_print("  %s -m eDP-1             # Pantalla de laptop\n", argv[0]);
+            g_print("  %s                      # Monitor por defecto, %d FPS\n", argv[0], TARGET_FPS);
+            g_print("  %s -m HDMI-A-1 -f 120   # Monitor HDMI, 120 FPS\n", argv[0]);
+            g_print("  %s -f 144               # Monitor por defecto, 144 FPS\n", argv[0]);
+            g_print("  %s -m eDP-1 -f 240      # Pantalla laptop, 240 FPS\n", argv[0]);
+            g_print("\nFPS populares: 60, 120, 144, 165, 240, 360\n");
             free(gtk_argv);
             return 0;
         } else {
@@ -394,9 +476,17 @@ int main(int argc, char **argv) {
     }
 
     if (app_data.monitor_name) {
-        g_print("Iniciando WallPin wallpaper en monitor: %s\n", app_data.monitor_name);
+        g_print("🖥️  Iniciando WallPin wallpaper en monitor: %s\n", app_data.monitor_name);
     } else {
-        g_print("Iniciando WallPin wallpaper en monitor por defecto\n");
+        g_print("🖥️  Iniciando WallPin wallpaper en monitor por defecto\n");
+    }
+    
+    if (app_data.target_fps > 0) {
+        g_print("🎯 FPS configurados: %d (velocidad constante: %.1f px/s)\n", 
+                app_data.target_fps, SCROLL_SPEED_PER_SECOND);
+    } else {
+        g_print("🎯 FPS por defecto: %d (velocidad: %.1f px/s)\n", 
+                TARGET_FPS, SCROLL_SPEED_PER_SECOND);
     }
 
     // Crear application ID único para cada monitor para evitar conflictos
