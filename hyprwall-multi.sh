@@ -6,6 +6,7 @@
 WALLPIN_DIR="/home/kalytheos/Documents/Proyectos/WallPin"
 LOG_FILE="/tmp/wallpin.log"
 PID_DIR="/tmp/wallpin_pids"
+DEFAULT_FPS=60
 
 # Crear directorio para PIDs si no existe
 mkdir -p "$PID_DIR"
@@ -16,20 +17,27 @@ show_help() {
     echo "Uso: $0 [comando] [opciones]"
     echo ""
     echo "Comandos:"
-    echo "  start [monitor]         - Iniciar en monitor específico"
-    echo "  start-all              - Iniciar en todos los monitores detectados"
-    echo "  stop [monitor]         - Detener monitor específico"
-    echo "  stop-all               - Detener todos los wallpapers"
-    echo "  restart [monitor]      - Reiniciar monitor específico"
-    echo "  restart-all            - Reiniciar todos los wallpapers"
-    echo "  status                 - Mostrar estado de todos los monitores"
-    echo "  list-monitors          - Listar monitores disponibles"
+    echo "  start [monitor] [fps]   - Iniciar en monitor específico con FPS opcional"
+    echo "  start-all [fps]         - Iniciar en todos los monitores con FPS opcional"
+    echo "  stop [monitor]          - Detener monitor específico"
+    echo "  stop-all                - Detener todos los wallpapers"
+    echo "  restart [monitor] [fps] - Reiniciar monitor específico con FPS opcional"
+    echo "  restart-all [fps]       - Reiniciar todos los wallpapers con FPS opcional"
+    echo "  status                  - Mostrar estado de todos los monitores"
+    echo "  list-monitors           - Listar monitores disponibles"
+    echo ""
+    echo "Opciones de FPS:"
+    echo "  60    - Estándar (por defecto)"
+    echo "  120   - Gaming suave"
+    echo "  144   - Gaming high-end"
+    echo "  240   - Gaming profesional"
+    echo "  360   - Máximo rendimiento"
     echo ""
     echo "Ejemplos:"
-    echo "  $0 start HDMI-A-1      # Iniciar en monitor HDMI principal"
-    echo "  $0 start eDP-1         # Iniciar en pantalla de laptop"
-    echo "  $0 start-all           # Iniciar en todos los monitores"
-    echo "  $0 stop-all            # Detener todos los wallpapers"
+    echo "  $0 start HDMI-A-1 120   # 120 FPS en monitor HDMI"
+    echo "  $0 start eDP-1 144      # 144 FPS en laptop"
+    echo "  $0 start-all 60         # 60 FPS en todos los monitores"
+    echo "  $0 restart-all 240      # Reiniciar todos con 240 FPS"
     echo ""
 }
 
@@ -83,7 +91,19 @@ check_status() {
 # Función para iniciar wallpaper en un monitor específico
 start_monitor() {
     local monitor="$1"
+    local fps="$2"
     local pid_file="$PID_DIR/wallpin_${monitor}.pid"
+    
+    # Usar FPS por defecto si no se especifica
+    if [[ -z "$fps" ]]; then
+        fps="$DEFAULT_FPS"
+    fi
+    
+    # Validar FPS
+    if [[ ! "$fps" =~ ^[0-9]+$ ]] || [[ "$fps" -lt 30 ]] || [[ "$fps" -gt 500 ]]; then
+        echo "❌ Error: FPS debe ser un número entre 30 y 500. Usando $DEFAULT_FPS FPS"
+        fps="$DEFAULT_FPS"
+    fi
     
     # Verificar si ya está ejecutándose
     if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
@@ -109,10 +129,10 @@ start_monitor() {
     fi
     
     # Limpiar log anterior para este monitor
-    echo "=== WallPin iniciado en $monitor $(date) ===" >> "$LOG_FILE"
+    echo "=== WallPin iniciado en $monitor con $fps FPS $(date) ===" >> "$LOG_FILE"
     
-    # Ejecutar wallpaper en background para el monitor específico
-    nohup ./build/wallpin-wallpaper --monitor "$monitor" >> "$LOG_FILE" 2>&1 &
+    # Ejecutar wallpaper en background para el monitor específico con FPS
+    nohup ./build/wallpin-wallpaper --monitor "$monitor" --fps "$fps" >> "$LOG_FILE" 2>&1 &
     
     # Guardar PID
     echo $! > "$pid_file"
@@ -121,7 +141,7 @@ start_monitor() {
     
     # Verificar que se inició correctamente
     if kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-        echo "✅ WallPin iniciado correctamente en $monitor"
+        echo "✅ WallPin iniciado correctamente en $monitor ($fps FPS)"
         echo "📄 Log: $LOG_FILE"
     else
         echo "❌ Error al iniciar WallPin en $monitor"
@@ -132,6 +152,7 @@ start_monitor() {
 
 # Función para iniciar en todos los monitores
 start_all() {
+    local fps="$1"
     echo "🚀 Iniciando WallPin en todos los monitores..."
     local monitors
     monitors=$(get_monitors)
@@ -142,7 +163,7 @@ start_all() {
     fi
     
     while IFS= read -r monitor; do
-        start_monitor "$monitor"
+        start_monitor "$monitor" "$fps"
         sleep 1  # Pequeña pausa entre monitores
     done <<< "$monitors"
 }
@@ -189,33 +210,35 @@ stop_all() {
 # Función para reiniciar un monitor
 restart_monitor() {
     local monitor="$1"
+    local fps="$2"
     stop_monitor "$monitor"
     sleep 1
-    start_monitor "$monitor"
+    start_monitor "$monitor" "$fps"
 }
 
 # Función para reiniciar todos
 restart_all() {
+    local fps="$1"
     stop_all
     sleep 2
-    start_all
+    start_all "$fps"
 }
 
 # Procesar argumentos
 case "$1" in
     "start")
         if [[ -n "$2" ]]; then
-            start_monitor "$2"
+            start_monitor "$2" "$3"  # monitor + fps opcional
         else
             echo "❌ Error: Especifica un monitor"
-            echo "Uso: $0 start <monitor>"
+            echo "Uso: $0 start <monitor> [fps]"
             echo "Monitores disponibles:"
             get_monitors | sed 's/^/  /'
             exit 1
         fi
         ;;
     "start-all")
-        start_all
+        start_all "$2"  # fps opcional
         ;;
     "stop")
         if [[ -n "$2" ]]; then
@@ -231,15 +254,15 @@ case "$1" in
         ;;
     "restart")
         if [[ -n "$2" ]]; then
-            restart_monitor "$2"
+            restart_monitor "$2" "$3"  # monitor + fps opcional
         else
             echo "❌ Error: Especifica un monitor"
-            echo "Uso: $0 restart <monitor>"
+            echo "Uso: $0 restart <monitor> [fps]"
             exit 1
         fi
         ;;
     "restart-all")
-        restart_all
+        restart_all "$2"  # fps opcional
         ;;
     "status")
         check_status

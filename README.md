@@ -88,12 +88,20 @@ sudo chmod +x /usr/local/bin/wallpin-wallpaper
 # List available monitors
 ./hyprwall-multi.sh list-monitors
 
-# Start on all monitors
+# Start on all monitors (default 60 FPS)
 ./hyprwall-multi.sh start-all
+
+# Start on all monitors with custom FPS
+./hyprwall-multi.sh start-all 120
+./hyprwall-multi.sh start-all 144
 
 # Start on specific monitor
 ./hyprwall-multi.sh start HDMI-A-1
 ./hyprwall-multi.sh start eDP-1
+
+# Start with custom FPS
+./hyprwall-multi.sh start HDMI-A-1 240
+./hyprwall-multi.sh start eDP-1 144
 
 # Check status of all monitors
 ./hyprwall-multi.sh status
@@ -106,6 +114,10 @@ sudo chmod +x /usr/local/bin/wallpin-wallpaper
 
 # Restart all
 ./hyprwall-multi.sh restart-all
+
+# Restart with custom FPS
+./hyprwall-multi.sh restart-all 120
+./hyprwall-multi.sh restart HDMI-A-1 240
 ```
 
 **Available commands:**
@@ -181,23 +193,29 @@ sudo chmod +x /usr/local/bin/wallpin-wallpaper
 Add to your `~/.config/hypr/hyprland.conf`:
 
 ```bash
-# Start WallPin on all monitors
+# Start WallPin on all monitors (default 60 FPS)
 exec-once = /path/to/WallPin/hyprwall-multi.sh start-all
+
+# Start with custom FPS for all monitors
+exec-once = /path/to/WallPin/hyprwall-multi.sh start-all 120
 
 # Keybinds for control
 bind = SUPER, W, exec, /path/to/WallPin/hyprwall-multi.sh restart-all
 bind = SUPER SHIFT, W, exec, /path/to/WallPin/hyprwall-multi.sh stop-all
+
+# Keybinds with custom FPS
+bind = SUPER, W, exec, /path/to/WallPin/hyprwall-multi.sh restart-all 144
 ```
 
-**Option 2: Specific monitors**
+**Option 2: Specific monitors with FPS control**
 ```bash
-# Start on specific monitors
-exec-once = /path/to/WallPin/hyprwall-multi.sh start HDMI-A-1
-exec-once = sleep 2 && /path/to/WallPin/hyprwall-multi.sh start eDP-1
+# Start on specific monitors with different FPS
+exec-once = /path/to/WallPin/hyprwall-multi.sh start HDMI-A-1 240
+exec-once = sleep 2 && /path/to/WallPin/hyprwall-multi.sh start eDP-1 144
 
-# Monitor-specific controls
-bind = SUPER, W, exec, /path/to/WallPin/hyprwall-multi.sh restart HDMI-A-1
-bind = SUPER SHIFT, W, exec, /path/to/WallPin/hyprwall-multi.sh restart eDP-1
+# Monitor-specific controls with FPS
+bind = SUPER, W, exec, /path/to/WallPin/hyprwall-multi.sh restart HDMI-A-1 240
+bind = SUPER SHIFT, W, exec, /path/to/WallPin/hyprwall-multi.sh restart eDP-1 144
 ```
 
 **Option 3: Single monitor (legacy)**
