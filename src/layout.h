@@ -19,8 +19,8 @@
 #define HORIZONTAL_RATIO_THRESHOLD 1.33 // Para imágenes horizontales (mayor que 1.33)
 
 // Límites y espaciado
-#define MAX_IMAGES_PER_ROW 4          // Número máximo de imágenes por fila
-#define IMAGE_SPACING 32 //16              // Espaciado entre imágenes
+#define MAX_IMAGES_PER_ROW 5          // Número máximo de imágenes por fila
+#define IMAGE_SPACING 16              // Espaciado entre imágenes
 #define WINDOW_WIDTH 1920            // Ancho de la ventana
 
 typedef enum {

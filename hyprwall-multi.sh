@@ -17,14 +17,14 @@ show_help() {
     echo "Uso: $0 [comando] [opciones]"
     echo ""
     echo "Comandos:"
-    echo "  start [monitor] [fps]   - Iniciar en monitor específico con FPS opcional"
-    echo "  start-all [fps]         - Iniciar en todos los monitores con FPS opcional"
-    echo "  stop [monitor]          - Detener monitor específico"
-    echo "  stop-all                - Detener todos los wallpapers"
-    echo "  restart [monitor] [fps] - Reiniciar monitor específico con FPS opcional"
-    echo "  restart-all [fps]       - Reiniciar todos los wallpapers con FPS opcional"
-    echo "  status                  - Mostrar estado de todos los monitores"
-    echo "  list-monitors           - Listar monitores disponibles"
+    echo "  start [monitor] [fps] [speed]   - Iniciar en monitor específico con FPS y velocidad opcional"
+    echo "  start-all [fps] [speed]         - Iniciar en todos los monitores con FPS y velocidad opcional"
+    echo "  stop [monitor]                  - Detener monitor específico"
+    echo "  stop-all                        - Detener todos los wallpapers"
+    echo "  restart [monitor] [fps] [speed] - Reiniciar monitor específico con FPS y velocidad opcional"
+    echo "  restart-all [fps] [speed]       - Reiniciar todos los wallpapers con FPS y velocidad opcional"
+    echo "  status                          - Mostrar estado de todos los monitores"
+    echo "  list-monitors                   - Listar monitores disponibles"
     echo ""
     echo "Opciones de FPS:"
     echo "  60    - Estándar (por defecto)"
@@ -33,11 +33,17 @@ show_help() {
     echo "  240   - Gaming profesional"
     echo "  360   - Máximo rendimiento"
     echo ""
+    echo "Opciones de Velocidad (px/s):"
+    echo "  10.0  - Lento y relajante"
+    echo "  18.0  - Normal (por defecto)"
+    echo "  25.0  - Rápido"
+    echo "  35.0  - Muy rápido"
+    echo ""
     echo "Ejemplos:"
-    echo "  $0 start HDMI-A-1 120   # 120 FPS en monitor HDMI"
-    echo "  $0 start eDP-1 144      # 144 FPS en laptop"
-    echo "  $0 start-all 60         # 60 FPS en todos los monitores"
-    echo "  $0 restart-all 240      # Reiniciar todos con 240 FPS"
+    echo "  $0 start HDMI-A-1 120 25.0     # 120 FPS, velocidad rápida en HDMI"
+    echo "  $0 start eDP-1 144 10.0        # 144 FPS, velocidad lenta en laptop"
+    echo "  $0 start-all 60 18.0           # 60 FPS, velocidad normal en todos"
+    echo "  $0 restart-all 240 30.0        # Reiniciar todos con 240 FPS y velocidad alta"
     echo ""
 }
 
@@ -92,6 +98,7 @@ check_status() {
 start_monitor() {
     local monitor="$1"
     local fps="$2"
+    local speed="$3"
     local pid_file="$PID_DIR/wallpin_${monitor}.pid"
     
     # Usar FPS por defecto si no se especifica
@@ -103,6 +110,25 @@ start_monitor() {
     if [[ ! "$fps" =~ ^[0-9]+$ ]] || [[ "$fps" -lt 30 ]] || [[ "$fps" -gt 500 ]]; then
         echo "❌ Error: FPS debe ser un número entre 30 y 500. Usando $DEFAULT_FPS FPS"
         fps="$DEFAULT_FPS"
+    fi
+    
+    # Validar velocidad si se especifica
+    local speed_param=""
+    if [[ -n "$speed" ]]; then
+        # Validación simple para números decimales (sin bc)
+        if [[ "$speed" =~ ^[0-9]+\.?[0-9]*$ ]] || [[ "$speed" =~ ^[0-9]*\.[0-9]+$ ]]; then
+            # Convertir a entero para comparación simple (multiplicar por 10)
+            local speed_int=$(echo "$speed * 10" | awk '{printf "%.0f", $1}')
+            if [[ "$speed_int" -ge 10 ]] && [[ "$speed_int" -le 1000 ]]; then
+                speed_param="--speed $speed"
+            else
+                echo "❌ Error: Velocidad debe ser un número entre 1.0 y 100.0. Usando velocidad por defecto"
+                speed_param=""
+            fi
+        else
+            echo "❌ Error: Velocidad debe ser un número válido. Usando velocidad por defecto"
+            speed_param=""
+        fi
     fi
     
     # Verificar si ya está ejecutándose
@@ -129,10 +155,14 @@ start_monitor() {
     fi
     
     # Limpiar log anterior para este monitor
-    echo "=== WallPin iniciado en $monitor con $fps FPS $(date) ===" >> "$LOG_FILE"
+    local config_msg="$fps FPS"
+    if [[ -n "$speed" ]]; then
+        config_msg="$fps FPS, $speed px/s"
+    fi
+    echo "=== WallPin iniciado en $monitor con $config_msg $(date) ===" >> "$LOG_FILE"
     
-    # Ejecutar wallpaper en background para el monitor específico con FPS
-    nohup ./build/wallpin-wallpaper --monitor "$monitor" --fps "$fps" >> "$LOG_FILE" 2>&1 &
+    # Ejecutar wallpaper en background para el monitor específico con FPS y velocidad
+    nohup ./build/wallpin-wallpaper --monitor "$monitor" --fps "$fps" $speed_param >> "$LOG_FILE" 2>&1 &
     
     # Guardar PID
     echo $! > "$pid_file"
@@ -141,7 +171,13 @@ start_monitor() {
     
     # Verificar que se inició correctamente
     if kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-        echo "✅ WallPin iniciado correctamente en $monitor ($fps FPS)"
+        local success_msg="✅ WallPin iniciado correctamente en $monitor ($fps FPS"
+        if [[ -n "$speed" ]]; then
+            success_msg="$success_msg, $speed px/s)"
+        else
+            success_msg="$success_msg)"
+        fi
+        echo "$success_msg"
         echo "📄 Log: $LOG_FILE"
     else
         echo "❌ Error al iniciar WallPin en $monitor"
@@ -153,6 +189,7 @@ start_monitor() {
 # Función para iniciar en todos los monitores
 start_all() {
     local fps="$1"
+    local speed="$2"
     echo "🚀 Iniciando WallPin en todos los monitores..."
     local monitors
     monitors=$(get_monitors)
@@ -163,7 +200,7 @@ start_all() {
     fi
     
     while IFS= read -r monitor; do
-        start_monitor "$monitor" "$fps"
+        start_monitor "$monitor" "$fps" "$speed"
         sleep 1  # Pequeña pausa entre monitores
     done <<< "$monitors"
 }
@@ -211,34 +248,36 @@ stop_all() {
 restart_monitor() {
     local monitor="$1"
     local fps="$2"
+    local speed="$3"
     stop_monitor "$monitor"
     sleep 1
-    start_monitor "$monitor" "$fps"
+    start_monitor "$monitor" "$fps" "$speed"
 }
 
 # Función para reiniciar todos
 restart_all() {
     local fps="$1"
+    local speed="$2"
     stop_all
     sleep 2
-    start_all "$fps"
+    start_all "$fps" "$speed"
 }
 
 # Procesar argumentos
 case "$1" in
     "start")
         if [[ -n "$2" ]]; then
-            start_monitor "$2" "$3"  # monitor + fps opcional
+            start_monitor "$2" "$3" "$4"  # monitor + fps + speed opcional
         else
             echo "❌ Error: Especifica un monitor"
-            echo "Uso: $0 start <monitor> [fps]"
+            echo "Uso: $0 start <monitor> [fps] [speed]"
             echo "Monitores disponibles:"
             get_monitors | sed 's/^/  /'
             exit 1
         fi
         ;;
     "start-all")
-        start_all "$2"  # fps opcional
+        start_all "$2" "$3"  # fps + speed opcional
         ;;
     "stop")
         if [[ -n "$2" ]]; then
@@ -254,15 +293,15 @@ case "$1" in
         ;;
     "restart")
         if [[ -n "$2" ]]; then
-            restart_monitor "$2" "$3"  # monitor + fps opcional
+            restart_monitor "$2" "$3" "$4"  # monitor + fps + speed opcional
         else
             echo "❌ Error: Especifica un monitor"
-            echo "Uso: $0 restart <monitor> [fps]"
+            echo "Uso: $0 restart <monitor> [fps] [speed]"
             exit 1
         fi
         ;;
     "restart-all")
-        restart_all "$2"  # fps opcional
+        restart_all "$2" "$3"  # fps + speed opcional
         ;;
     "status")
         check_status
