@@ -17,16 +17,20 @@ show_help() {
     echo "Uso: $0 [comando] [opciones]"
     echo ""
     echo "Comandos:"
-    echo "  start [monitor] [fps] [speed]   - Iniciar en monitor específico con FPS y velocidad opcional"
-    echo "  start-all [fps] [speed]         - Iniciar en todos los monitores con FPS y velocidad opcional"
-    echo "  stop [monitor]                  - Detener monitor específico"
-    echo "  stop-all                        - Detener todos los wallpapers"
-    echo "  restart [monitor] [fps] [speed] - Reiniciar monitor específico con FPS y velocidad opcional"
-    echo "  restart-all [fps] [speed]       - Reiniciar todos los wallpapers con FPS y velocidad opcional"
-    echo "  status                          - Mostrar estado de todos los monitores"
-    echo "  list-monitors                   - Listar monitores disponibles"
+    echo "  start [monitor] [-f fps] [-s speed]       - Iniciar en monitor específico"
+    echo "  start-all [-f fps] [-s speed]             - Iniciar en todos los monitores"
+    echo "  stop [monitor]                            - Detener monitor específico"
+    echo "  stop-all                                  - Detener todos los wallpapers"
+    echo "  restart [monitor] [-f fps] [-s speed]     - Reiniciar monitor específico"
+    echo "  restart-all [-f fps] [-s speed]           - Reiniciar todos los wallpapers"
+    echo "  status                                    - Mostrar estado de todos los monitores"
+    echo "  list-monitors                             - Listar monitores disponibles"
     echo ""
-    echo "Opciones de FPS:"
+    echo "Opciones:"
+    echo "  -f, --fps [30-500]      - Configurar FPS (por defecto: 60)"
+    echo "  -s, --speed [1.0-100.0] - Configurar velocidad en px/s (por defecto: 18.0)"
+    echo ""
+    echo "Opciones de FPS populares:"
     echo "  60    - Estándar (por defecto)"
     echo "  120   - Gaming suave"
     echo "  144   - Gaming high-end"
@@ -40,10 +44,11 @@ show_help() {
     echo "  35.0  - Muy rápido"
     echo ""
     echo "Ejemplos:"
-    echo "  $0 start HDMI-A-1 120 25.0     # 120 FPS, velocidad rápida en HDMI"
-    echo "  $0 start eDP-1 144 10.0        # 144 FPS, velocidad lenta en laptop"
-    echo "  $0 start-all 60 18.0           # 60 FPS, velocidad normal en todos"
-    echo "  $0 restart-all 240 30.0        # Reiniciar todos con 240 FPS y velocidad alta"
+    echo "  $0 start HDMI-A-1 -f 120 -s 25.0       # 120 FPS, velocidad rápida en HDMI"
+    echo "  $0 start eDP-1 -f 144 -s 10.0          # 144 FPS, velocidad lenta en laptop"
+    echo "  $0 start-all -f 60 -s 18.0             # 60 FPS, velocidad normal en todos"
+    echo "  $0 restart-all -f 240 -s 30.0          # Reiniciar todos con 240 FPS y velocidad alta"
+    echo "  $0 start HDMI-A-1 120 25.0             # También soporta sintaxis posicional"
     echo ""
 }
 
@@ -263,21 +268,85 @@ restart_all() {
     start_all "$fps" "$speed"
 }
 
+# Función para parsear argumentos con flags
+parse_args() {
+    local command="$1"
+    shift
+    
+    local fps=""
+    local speed=""
+    local monitor=""
+    local remaining_args=()
+    
+    # Parsear argumentos
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -f|--fps)
+                fps="$2"
+                shift 2
+                ;;
+            -s|--speed)
+                speed="$2"
+                shift 2
+                ;;
+            *)
+                remaining_args+=("$1")
+                shift
+                ;;
+        esac
+    done
+    
+    # Para comandos que requieren monitor, el primer argumento restante es el monitor
+    if [[ "${#remaining_args[@]}" -gt 0 ]]; then
+        monitor="${remaining_args[0]}"
+    fi
+    
+    # Si no se especificó FPS/speed como flags, usar argumentos posicionales
+    if [[ -z "$fps" && "${#remaining_args[@]}" -gt 1 ]]; then
+        fps="${remaining_args[1]}"
+    fi
+    if [[ -z "$speed" && "${#remaining_args[@]}" -gt 2 ]]; then
+        speed="${remaining_args[2]}"
+    fi
+    
+    # Ejecutar comando con argumentos parseados
+    case "$command" in
+        "start")
+            if [[ -n "$monitor" ]]; then
+                start_monitor "$monitor" "$fps" "$speed"
+            else
+                echo "❌ Error: Especifica un monitor"
+                echo "Uso: $0 start <monitor> [-f fps] [-s speed]"
+                echo "Monitores disponibles:"
+                get_monitors | sed 's/^/  /'
+                exit 1
+            fi
+            ;;
+        "start-all")
+            start_all "$fps" "$speed"
+            ;;
+        "restart")
+            if [[ -n "$monitor" ]]; then
+                restart_monitor "$monitor" "$fps" "$speed"
+            else
+                echo "❌ Error: Especifica un monitor"
+                echo "Uso: $0 restart <monitor> [-f fps] [-s speed]"
+                exit 1
+            fi
+            ;;
+        "restart-all")
+            restart_all "$fps" "$speed"
+            ;;
+    esac
+}
+
 # Procesar argumentos
 case "$1" in
     "start")
-        if [[ -n "$2" ]]; then
-            start_monitor "$2" "$3" "$4"  # monitor + fps + speed opcional
-        else
-            echo "❌ Error: Especifica un monitor"
-            echo "Uso: $0 start <monitor> [fps] [speed]"
-            echo "Monitores disponibles:"
-            get_monitors | sed 's/^/  /'
-            exit 1
-        fi
+        parse_args "$@"
         ;;
     "start-all")
-        start_all "$2" "$3"  # fps + speed opcional
+        parse_args "$@"
         ;;
     "stop")
         if [[ -n "$2" ]]; then
@@ -292,16 +361,10 @@ case "$1" in
         stop_all
         ;;
     "restart")
-        if [[ -n "$2" ]]; then
-            restart_monitor "$2" "$3" "$4"  # monitor + fps + speed opcional
-        else
-            echo "❌ Error: Especifica un monitor"
-            echo "Uso: $0 restart <monitor> [fps] [speed]"
-            exit 1
-        fi
+        parse_args "$@"
         ;;
     "restart-all")
-        restart_all "$2" "$3"  # fps + speed opcional
+        parse_args "$@"
         ;;
     "status")
         check_status
