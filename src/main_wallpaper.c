@@ -27,8 +27,8 @@ static double current_scroll_position = 0.0;
 static gboolean auto_scroll_enabled = TRUE;
 
 // Configuración del auto-scroll para wallpaper (más lento)
-#define SCROLL_SPEED 0.3        // Velocidad más lenta para wallpaper
-#define SCROLL_INTERVAL 16      // 60 FPS
+#define SCROLL_SPEED 0.3        // Velocidad más lenta para wallpaper (pixels por frame)
+#define SCROLL_INTERVAL 16      // Intervalo fijo en ms (16ms = ~60 FPS, NO afecta velocidad)
 
 static GtkWidget *create_image_grid(void) {
     GtkWidget *container = gtk_box_new(GTK_ORIENTATION_VERTICAL, IMAGE_SPACING);
@@ -145,10 +145,12 @@ static void render_layout(GtkBox *container) {
 
     int container_width = WINDOW_WIDTH - (IMAGE_SPACING * 2);
     int num_columns = container_width / (STANDARD_WIDTH + IMAGE_SPACING);
-    if (num_columns > 5) num_columns = 5;
+    
+    // Usar MAX_IMAGES_PER_ROW del layout.h
+    if (num_columns > MAX_IMAGES_PER_ROW) num_columns = MAX_IMAGES_PER_ROW;
     if (num_columns < 2) num_columns = 2;
 
-    g_print("Using %d columns for wallpaper layout\n\n", num_columns);
+    g_print("Using %d columns for wallpaper layout (max allowed: %d)\n\n", num_columns, MAX_IMAGES_PER_ROW);
 
     GtkWidget *columns_container = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, IMAGE_SPACING);
     gtk_widget_set_halign(columns_container, GTK_ALIGN_CENTER);
@@ -207,6 +209,8 @@ static gboolean auto_scroll_tick(G_GNUC_UNUSED gpointer user_data) {
         return G_SOURCE_CONTINUE;
     }
 
+    // Incrementar posición de scroll por SCROLL_SPEED pixels por frame
+    // SCROLL_INTERVAL controla la frecuencia de actualización (FPS), NO la velocidad
     current_scroll_position += SCROLL_SPEED;
 
     if (current_scroll_position >= max_scroll) {
@@ -276,7 +280,7 @@ static void setup_infinite_scroll(GtkWidget *scroll_window) {
 
     scroll_timer_id = g_timeout_add(SCROLL_INTERVAL, auto_scroll_tick, NULL);
 
-    g_print("Wallpaper auto-scroll iniciado (velocidad: %.1f px/frame)\n", SCROLL_SPEED);
+    g_print("Wallpaper auto-scroll iniciado (velocidad: %.1f px/frame, intervalo: %d ms)\n", SCROLL_SPEED, SCROLL_INTERVAL);
 }
 
 // Estructura para pasar datos a la función activate

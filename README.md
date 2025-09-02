@@ -23,7 +23,7 @@ https://github.com/Kalytheos/Wallpin/docs/media/show.mp4
 - � **Multi-Monitor**: Independent wallpaper on each monitor simultaneously
 - 🎨 **True Wallpaper**: Native Wayland layer shell integration (not just fullscreen)
 - 🚫 **Non-Interactive**: Blocks user scroll while maintaining image hover effects
-- 🪟 **Dual Modes**: Regular window application or wallpaper background
+- 🪟 **Wallpaper Mode**: Native layer shell wallpaper integration
 - ⚡ **GTK4 + Layer Shell**: Native Wayland/Hyprland integration
 - 🎯 **Optimized**: Efficient image loading with per-instance state management
 - 🎲 **Image Shuffling**: Multiple strategies to reorder wallpaper display (NEW!)
@@ -70,13 +70,12 @@ make clean && make wallpaper
 ### Manual Installation
 
 ```bash
-# Compile both versions
-make clean && make all
+# Compile wallpaper version
+make clean && make
 
-# Install binaries (optional)
-sudo cp build/wallpin /usr/local/bin/
+# Install binary (optional)
 sudo cp build/wallpin-wallpaper /usr/local/bin/
-sudo chmod +x /usr/local/bin/wallpin*
+sudo chmod +x /usr/local/bin/wallpin-wallpaper
 ```
 
 ## 🖥️ Usage
@@ -133,15 +132,6 @@ sudo chmod +x /usr/local/bin/wallpin*
 
 # Restart wallpaper
 ./hyprwall.sh restart
-```
-
-### As Regular Application
-
-```bash
-# Start window mode
-wallpin
-# Or
-./build/wallpin
 ```
 
 ### Direct Usage with Monitor Selection
@@ -303,19 +293,12 @@ Modify in `src/layout.h`:
 - **Fallback support**: Falls back to fullscreen if layer shell unavailable
 - **Wayland native**: Uses `wlr-layer-shell-unstable-v1` protocol
 
-## 🎮 Controls (Window Mode)
-
-- **Space**: Toggle auto-scroll on/off
-- **Escape**: Exit application
-- **M**: Show memory usage
-
 ## 📁 Project Structure
 
 ```
 WallPin/
 ├── src/                      # Source code
-│   ├── main.c                # Regular window application
-│   ├── main_wallpaper.c      # Wallpaper background version (multi-monitor)
+│   ├── main_wallpaper.c      # Main wallpaper application (multi-monitor)
 │   ├── layer_shell.c         # Wayland layer shell integration
 │   ├── layout.c              # Masonry layout algorithm (per-instance state)
 │   ├── utils.c               # Utility functions and CSS

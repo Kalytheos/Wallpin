@@ -9,30 +9,20 @@ BUILD_DIR = build
 COMMON_SRCS = $(SRC_DIR)/config.c $(SRC_DIR)/layout.c $(SRC_DIR)/utils.c $(SRC_DIR)/wallpaper.c $(SRC_DIR)/layer_shell.c
 COMMON_OBJS = $(COMMON_SRCS:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 
-# Archivos principales
-MAIN_SRC = $(SRC_DIR)/main.c
+# Archivo principal (solo wallpaper mode)
 WALLPAPER_SRC = $(SRC_DIR)/main_wallpaper.c
-
-MAIN_OBJ = $(BUILD_DIR)/main.o
 WALLPAPER_OBJ = $(BUILD_DIR)/main_wallpaper.o
 
-# Targets
-TARGET_NORMAL = wallpin
+# Target principal
 TARGET_WALLPAPER = wallpin-wallpaper
 
-.PHONY: all clean wallpaper normal
+.PHONY: all clean wallpaper
 
-all: $(BUILD_DIR)/$(TARGET_NORMAL) $(BUILD_DIR)/$(TARGET_WALLPAPER)
+# Default target builds wallpaper version
+all: $(BUILD_DIR)/$(TARGET_WALLPAPER)
 
-# Versión normal (aplicación de ventana)
-normal: $(BUILD_DIR)/$(TARGET_NORMAL)
-
-# Versión wallpaper (layer shell)
+# Alias for clarity
 wallpaper: $(BUILD_DIR)/$(TARGET_WALLPAPER)
-
-$(BUILD_DIR)/$(TARGET_NORMAL): $(COMMON_OBJS) $(MAIN_OBJ)
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(COMMON_OBJS) $(MAIN_OBJ) -o $@ $(LDFLAGS)
 
 $(BUILD_DIR)/$(TARGET_WALLPAPER): $(COMMON_OBJS) $(WALLPAPER_OBJ)
 	@mkdir -p $(BUILD_DIR)
