@@ -141,8 +141,38 @@ sudo chmod +x /usr/local/bin/wallpin-wallpaper
 ./build/wallpin-wallpaper --monitor HDMI-A-1
 ./build/wallpin-wallpaper -m eDP-1
 
+# Configure FPS (30-500)
+./build/wallpin-wallpaper --fps 120
+./build/wallpin-wallpaper -f 144
+
+# Combine monitor and FPS
+./build/wallpin-wallpaper -m HDMI-A-1 -f 240
+
 # See help
 ./build/wallpin-wallpaper --help
+```
+
+### 🎯 FPS Configuration
+
+**Popular FPS Settings:**
+- **60 FPS** (default): Balanced performance, standard displays
+- **120 FPS**: Smooth animations, 120Hz displays  
+- **144 FPS**: Gaming monitors, ultra-smooth scrolling
+- **165 FPS**: High-end gaming displays
+- **240 FPS**: Professional gaming, maximum smoothness
+- **360 FPS**: Extreme refresh rates
+
+**Performance Notes:**
+- Higher FPS = smoother animation but more CPU usage
+- Scroll speed remains constant (18 pixels/second) regardless of FPS
+- Recommended: Match your monitor's refresh rate
+
+```bash
+# Examples for different display types
+./build/wallpin-wallpaper -f 60   # Standard monitor
+./build/wallpin-wallpaper -f 120  # Gaming monitor
+./build/wallpin-wallpaper -f 144  # High refresh gaming
+./build/wallpin-wallpaper -f 240  # Professional gaming
 ```
 
 ### 🔧 Hyprland Integration
@@ -446,6 +476,11 @@ MIT License - see LICENSE file for details
 - ✅ **Image normalization**: `normalize-images.sh` standardizes inconsistent naming
   - Handles `wall_XXX`, `wallpaper_XXXX`, and mixed patterns
   - Converts all to consistent `wall_001.ext` format
+- ✅ **Configurable FPS system**: Fine-tune performance for any display
+  - Range: 30-500 FPS with `--fps` or `-f` parameter
+  - Speed independence: Constant 18 px/second regardless of FPS
+  - Popular presets: 60, 120, 144, 165, 240, 360 FPS
+  - Real-time switching with `set_target_fps()` function
 - ✅ **Robust algorithms**: Fixed random strategy with Fisher-Yates algorithm
 - ✅ **Data safety**: Comprehensive backup systems and validation checks
 - ✅ **Preview mode**: See changes before applying them
