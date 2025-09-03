@@ -17,6 +17,7 @@ static void init_scroll_config(void);
 #include "utils.h"
 #include "layout.h"
 #include "layer_shell.h"
+#include "color_analysis.h"
 
 #define WINDOW_HEIGHT 1080
 #define CORNER_RADIUS 16
@@ -25,6 +26,7 @@ static MasonryLayout layout;
 
 static GtkWidget *create_image_grid(void);
 static void load_images_from_directory(GtkBox *container, const char *dir_path);
+static void load_images_by_color_groups(GtkBox *container, const char *dir_path, ColorMode mode, int tolerance);
 static GtkWidget *create_rounded_image(const char *image_path, int target_width, int target_height);
 static void render_layout(GtkBox *container);
 
@@ -61,6 +63,74 @@ static GtkWidget *create_image_grid(void) {
     gtk_widget_set_margin_top(container, IMAGE_SPACING * 2);
     gtk_widget_set_margin_bottom(container, IMAGE_SPACING * 2);
     return container;
+}
+
+static void load_images_by_color_groups(GtkBox *container, const char *dir_path, ColorMode mode, int tolerance) {
+    DIR *dir;
+    struct dirent *entry;
+    char full_path[PATH_MAX];
+    GList *image_files = NULL;
+    int image_count = 0;
+
+    masonry_layout_init(&layout, WINDOW_WIDTH, STANDARD_WIDTH, IMAGE_SPACING);
+
+    dir = opendir(dir_path);
+    if (dir == NULL) {
+        g_print("Error opening directory: %s\n", dir_path);
+        return;
+    }
+
+    g_print("\nScanning directory: %s\n", dir_path);
+    g_print("=== WALLPAPER MODE - LOADING IMAGES BY COLOR ===\n");
+    g_print("🎨 Modo de color: %d | Tolerancia: %d\n", mode, tolerance);
+
+    // Recopilar archivos de imagen
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_REG) {
+            const char *ext = strrchr(entry->d_name, '.');
+            if (ext && (strcasecmp(ext, ".jpg") == 0 ||
+                       strcasecmp(ext, ".jpeg") == 0 ||
+                       strcasecmp(ext, ".png") == 0)) {
+                snprintf(full_path, PATH_MAX, "%s/%s", dir_path, entry->d_name);
+                image_files = g_list_append(image_files, g_strdup(full_path));
+                image_count++;
+            }
+        }
+    }
+    closedir(dir);
+
+    g_print("Found %d images for color analysis\n", image_count);
+
+    if (image_count == 0) {
+        g_print("No images found, falling back to normal mode\n");
+        return;
+    }
+
+    // Agrupar imágenes por color
+    GList *color_groups = group_images_by_color(image_files, mode, tolerance);
+    print_color_analysis(color_groups);
+
+    // Renderizar grupos de colores
+    for (GList *group_list = color_groups; group_list != NULL; group_list = group_list->next) {
+        ColorGroup *group = (ColorGroup *)group_list->data;
+        
+        g_print("🎨 Cargando grupo: %s (%d imágenes)\n", 
+                group->color_name, g_list_length(group->image_paths));
+
+        // Agregar imágenes del grupo al layout
+        for (GList *img_list = group->image_paths; img_list != NULL; img_list = img_list->next) {
+            const char *image_path = (const char *)img_list->data;
+            masonry_layout_add_image(&layout, image_path);
+        }
+    }
+
+    // Calcular layout y renderizar
+    masonry_layout_calculate(&layout);
+    render_layout(container);
+
+    // Limpiar memoria
+    g_list_free_full(image_files, g_free);
+    g_list_free_full(color_groups, (GDestroyNotify)free_color_group);
 }
 
 static void load_images_from_directory(GtkBox *container, const char *dir_path) {
@@ -374,6 +444,8 @@ typedef struct {
     const char *monitor_name;
     int target_fps;
     double target_speed;
+    ColorMode color_mode;
+    int color_tolerance;
 } AppData;
 
 static void activate(GtkApplication *app, gpointer user_data) {
@@ -422,7 +494,13 @@ static void activate(GtkApplication *app, gpointer user_data) {
     gtk_widget_set_sensitive(grid, TRUE);
     
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), grid);
-    load_images_from_directory(GTK_BOX(grid), ASSETS_DIR);
+    
+    // Cargar imágenes según el modo especificado
+    if (data && data->color_mode != COLOR_MODE_DEFAULT) {
+        load_images_by_color_groups(GTK_BOX(grid), ASSETS_DIR, data->color_mode, data->color_tolerance);
+    } else {
+        load_images_from_directory(GTK_BOX(grid), ASSETS_DIR);
+    }
 
     // Configurar FPS si se especificó
     if (data && data->target_fps > 0) {
@@ -453,7 +531,7 @@ static void cleanup_auto_scroll(void) {
 int main(int argc, char **argv) {
     GtkApplication *app;
     int status;
-    AppData app_data = {NULL, 0, 0.0};
+    AppData app_data = {NULL, 0, 0.0, COLOR_MODE_DEFAULT, 50};
     
     // Inicializar configuración de scroll
     init_scroll_config();
@@ -508,21 +586,63 @@ int main(int argc, char **argv) {
                 free(gtk_argv);
                 return 1;
             }
+        } else if (strcmp(argv[i], "--color-mode") == 0 || strcmp(argv[i], "-c") == 0) {
+            if (i + 1 < argc) {
+                int mode = atoi(argv[i + 1]);
+                if (mode >= 1 && mode <= 5) {
+                    app_data.color_mode = (ColorMode)mode;
+                    i++; // Saltar el siguiente argumento
+                } else {
+                    g_print("Error: Modo de color debe estar entre 1 y 5\n");
+                    free(gtk_argv);
+                    return 1;
+                }
+            } else {
+                g_print("Error: --color-mode requiere un valor numérico\n");
+                free(gtk_argv);
+                return 1;
+            }
+        } else if (strcmp(argv[i], "--color-tolerance") == 0 || strcmp(argv[i], "-t") == 0) {
+            if (i + 1 < argc) {
+                int tolerance = atoi(argv[i + 1]);
+                if (tolerance >= 10 && tolerance <= 100) {
+                    app_data.color_tolerance = tolerance;
+                    i++; // Saltar el siguiente argumento
+                } else {
+                    g_print("Error: Tolerancia de color debe estar entre 10 y 100\n");
+                    free(gtk_argv);
+                    return 1;
+                }
+            } else {
+                g_print("Error: --color-tolerance requiere un valor numérico\n");
+                free(gtk_argv);
+                return 1;
+            }
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             g_print("WallPin Wallpaper Mode\n");
             g_print("Uso: %s [opciones]\n", argv[0]);
             g_print("Opciones:\n");
-            g_print("  --monitor, -m <nombre>  Especificar monitor (ej: HDMI-A-1, eDP-1)\n");
-            g_print("  --fps, -f <número>      Configurar FPS (30-500, por defecto: %d)\n", TARGET_FPS);
-            g_print("  --speed, -s <número>    Configurar velocidad (1.0-100.0 px/s, por defecto: %.1f)\n", SCROLL_SPEED_PER_SECOND);
-            g_print("  --help, -h              Mostrar esta ayuda\n");
+            g_print("  --monitor, -m <nombre>      Especificar monitor (ej: HDMI-A-1, eDP-1)\n");
+            g_print("  --fps, -f <número>          Configurar FPS (30-500, por defecto: %d)\n", TARGET_FPS);
+            g_print("  --speed, -s <número>        Configurar velocidad (1.0-100.0 px/s, por defecto: %.1f)\n", SCROLL_SPEED_PER_SECOND);
+            g_print("  --color-mode, -c <número>   Modo de organización por color (1-5, por defecto: 1)\n");
+            g_print("  --color-tolerance, -t <num> Tolerancia de color (10-100, por defecto: 50)\n");
+            g_print("  --help, -h                  Mostrar esta ayuda\n");
+            g_print("\nModos de Color:\n");
+            g_print("  1 - Normal (sin agrupación por color)\n");
+            g_print("  2 - Por color dominante\n");
+            g_print("  3 - Por paleta de colores\n");
+            g_print("  4 - Por matiz (hue)\n");
+            g_print("  5 - Por temperatura (cálidos/fríos)\n");
             g_print("\nEjemplos:\n");
-            g_print("  %s                      # Por defecto: %d FPS, %.1f px/s\n", argv[0], TARGET_FPS, SCROLL_SPEED_PER_SECOND);
-            g_print("  %s -f 120 -s 25.0       # 120 FPS, scroll rápido\n", argv[0]);
-            g_print("  %s -f 240 -s 10.0       # 240 FPS ultra suave, scroll lento\n", argv[0]);
-            g_print("  %s -m HDMI-A-1 -f 144 -s 30.0  # Monitor específico con config custom\n", argv[0]);
+            g_print("  %s                              # Modo normal\n", argv[0]);
+            g_print("  %s -c 2                         # Organizar por color dominante\n", argv[0]);
+            g_print("  %s -c 2 -t 30                   # Color dominante con tolerancia baja\n", argv[0]);
+            g_print("  %s -f 120 -s 25.0 -c 4          # 120 FPS, rápido, por matiz\n", argv[0]);
+            g_print("  %s -m HDMI-A-1 -c 5 -t 70       # Monitor específico, por temperatura\n", argv[0]);
             g_print("\nFPS populares: 60, 120, 144, 165, 240, 360\n");
             g_print("Velocidades: 10.0 (lento), 18.0 (normal), 25.0 (rápido), 35.0 (muy rápido)\n");
+            g_print("Tolerancia: 30 (estricta), 50 (normal), 70 (permisiva)\n");
             free(gtk_argv);
             return 0;
         } else {
@@ -537,7 +657,7 @@ int main(int argc, char **argv) {
         g_print("🖥️  Iniciando WallPin wallpaper en monitor por defecto\n");
     }
     
-    if (app_data.target_fps > 0 || app_data.target_speed > 0) {
+    if (app_data.target_fps > 0 || app_data.target_speed > 0 || app_data.color_mode != COLOR_MODE_DEFAULT) {
         g_print("🎯 Configuración personalizada:\n");
         if (app_data.target_fps > 0) {
             g_print("   FPS: %d\n", app_data.target_fps);
@@ -549,8 +669,16 @@ int main(int argc, char **argv) {
         } else {
             g_print("   Velocidad: %.1f px/s (por defecto)\n", SCROLL_SPEED_PER_SECOND);
         }
+        
+        const char *color_mode_names[] = {
+            "", "Normal", "Color Dominante", "Paleta", "Matiz", "Temperatura"
+        };
+        g_print("   Modo Color: %s (%d)\n", color_mode_names[app_data.color_mode], app_data.color_mode);
+        if (app_data.color_mode != COLOR_MODE_DEFAULT) {
+            g_print("   Tolerancia: %d\n", app_data.color_tolerance);
+        }
     } else {
-        g_print("🎯 Configuración por defecto: %d FPS, %.1f px/s\n", 
+        g_print("🎯 Configuración por defecto: %d FPS, %.1f px/s, Modo Normal\n", 
                 TARGET_FPS, SCROLL_SPEED_PER_SECOND);
     }
 

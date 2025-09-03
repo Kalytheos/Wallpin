@@ -1,12 +1,12 @@
 CC = gcc
 CFLAGS = -Wall -Wextra $(shell pkg-config --cflags gtk4 gdk-pixbuf-2.0 gtk4-layer-shell-0)
-LDFLAGS = $(shell pkg-config --libs gtk4 gdk-pixbuf-2.0 gtk4-layer-shell-0)
+LDFLAGS = $(shell pkg-config --libs gtk4 gdk-pixbuf-2.0 gtk4-layer-shell-0) -lm
 
 SRC_DIR = src
 BUILD_DIR = build
 
 # Archivos fuente comunes
-COMMON_SRCS = $(SRC_DIR)/config.c $(SRC_DIR)/layout.c $(SRC_DIR)/utils.c $(SRC_DIR)/wallpaper.c $(SRC_DIR)/layer_shell.c
+COMMON_SRCS = $(SRC_DIR)/config.c $(SRC_DIR)/layout.c $(SRC_DIR)/utils.c $(SRC_DIR)/wallpaper.c $(SRC_DIR)/layer_shell.c $(SRC_DIR)/color_analysis.c
 COMMON_OBJS = $(COMMON_SRCS:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 
 # Archivo principal (solo wallpaper mode)
