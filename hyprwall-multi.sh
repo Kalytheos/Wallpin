@@ -17,18 +17,27 @@ show_help() {
     echo "Uso: $0 [comando] [opciones]"
     echo ""
     echo "Comandos:"
-    echo "  start [monitor] [-f fps] [-s speed]       - Iniciar en monitor específico"
-    echo "  start-all [-f fps] [-s speed]             - Iniciar en todos los monitores"
-    echo "  stop [monitor]                            - Detener monitor específico"
-    echo "  stop-all                                  - Detener todos los wallpapers"
-    echo "  restart [monitor] [-f fps] [-s speed]     - Reiniciar monitor específico"
-    echo "  restart-all [-f fps] [-s speed]           - Reiniciar todos los wallpapers"
-    echo "  status                                    - Mostrar estado de todos los monitores"
-    echo "  list-monitors                             - Listar monitores disponibles"
+    echo "  start [monitor] [-f fps] [-s speed] [-c mode] [-t tolerance]  - Iniciar en monitor específico"
+    echo "  start-all [-f fps] [-s speed] [-c mode] [-t tolerance]        - Iniciar en todos los monitores"
+    echo "  stop [monitor]                                                - Detener monitor específico"
+    echo "  stop-all                                                      - Detener todos los wallpapers"
+    echo "  restart [monitor] [-f fps] [-s speed] [-c mode] [-t tolerance] - Reiniciar monitor específico"
+    echo "  restart-all [-f fps] [-s speed] [-c mode] [-t tolerance]       - Reiniciar todos los wallpapers"
+    echo "  status                                                        - Mostrar estado de todos los monitores"
+    echo "  list-monitors                                                 - Listar monitores disponibles"
     echo ""
     echo "Opciones:"
-    echo "  -f, --fps [30-500]      - Configurar FPS (por defecto: 60)"
-    echo "  -s, --speed [1.0-100.0] - Configurar velocidad en px/s (por defecto: 18.0)"
+    echo "  -f, --fps [30-500]         - Configurar FPS (por defecto: 60)"
+    echo "  -s, --speed [1.0-100.0]    - Configurar velocidad en px/s (por defecto: 18.0)"
+    echo "  -c, --color-mode [1-5]     - Modo de organización por color (por defecto: 1)"
+    echo "  -t, --color-tolerance [10-100] - Tolerancia de color (por defecto: 50)"
+    echo ""
+    echo "Modos de Color:"
+    echo "  1 - Normal (sin agrupación por color)"
+    echo "  2 - Por color dominante"
+    echo "  3 - Por paleta de colores"
+    echo "  4 - Por matiz (hue)"
+    echo "  5 - Por temperatura (cálidos/fríos)"
     echo ""
     echo "Opciones de FPS populares:"
     echo "  60    - Estándar (por defecto)"
@@ -43,11 +52,18 @@ show_help() {
     echo "  25.0  - Rápido"
     echo "  35.0  - Muy rápido"
     echo ""
+    echo "Tolerancia de Color:"
+    echo "  30    - Estricta (grupos más específicos)"
+    echo "  50    - Normal (por defecto)"
+    echo "  70    - Permisiva (grupos más amplios)"
+    echo ""
     echo "Ejemplos:"
     echo "  $0 start HDMI-A-1 -f 120 -s 25.0       # 120 FPS, velocidad rápida en HDMI"
     echo "  $0 start eDP-1 -f 144 -s 10.0          # 144 FPS, velocidad lenta en laptop"
     echo "  $0 start-all -f 60 -s 18.0             # 60 FPS, velocidad normal en todos"
     echo "  $0 restart-all -f 240 -s 30.0          # Reiniciar todos con 240 FPS y velocidad alta"
+    echo "  $0 start HDMI-A-1 -c 2 -t 60           # Color dominante con tolerancia 60"
+    echo "  $0 start-all -c 4 -t 30 -f 120         # Modo matiz, tolerancia estricta, 120 FPS"
     echo "  $0 start HDMI-A-1 120 25.0             # También soporta sintaxis posicional"
     echo ""
 }
@@ -104,6 +120,8 @@ start_monitor() {
     local monitor="$1"
     local fps="$2"
     local speed="$3"
+    local color_mode="$4"
+    local color_tolerance="$5"
     local pid_file="$PID_DIR/wallpin_${monitor}.pid"
     
     # Usar FPS por defecto si no se especifica
@@ -136,6 +154,25 @@ start_monitor() {
         fi
     fi
     
+    # Validar y construir parámetros de color
+    local color_param=""
+    local tolerance_param=""
+    if [[ -n "$color_mode" ]]; then
+        if [[ "$color_mode" =~ ^[1-5]$ ]]; then
+            color_param="--color-mode $color_mode"
+            if [[ -n "$color_tolerance" ]]; then
+                if [[ "$color_tolerance" =~ ^[0-9]+$ ]] && [[ "$color_tolerance" -ge 10 ]] && [[ "$color_tolerance" -le 100 ]]; then
+                    tolerance_param="--color-tolerance $color_tolerance"
+                else
+                    echo "❌ Error: Tolerancia de color debe ser un número entre 10 y 100. Usando tolerancia por defecto"
+                fi
+            fi
+        else
+            echo "❌ Error: Modo de color debe ser un número entre 1 y 5. Ignorando modo de color"
+            color_param=""
+        fi
+    fi
+    
     # Verificar si ya está ejecutándose
     if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
         echo "⚠️  WallPin ya está ejecutándose en $monitor"
@@ -162,12 +199,18 @@ start_monitor() {
     # Limpiar log anterior para este monitor
     local config_msg="$fps FPS"
     if [[ -n "$speed" ]]; then
-        config_msg="$fps FPS, $speed px/s"
+        config_msg="$config_msg, $speed px/s"
+    fi
+    if [[ -n "$color_mode" ]]; then
+        config_msg="$config_msg, color mode $color_mode"
+        if [[ -n "$color_tolerance" ]]; then
+            config_msg="$config_msg (tolerance $color_tolerance)"
+        fi
     fi
     echo "=== WallPin iniciado en $monitor con $config_msg $(date) ===" >> "$LOG_FILE"
     
-    # Ejecutar wallpaper en background para el monitor específico con FPS y velocidad
-    nohup ./build/wallpin-wallpaper --monitor "$monitor" --fps "$fps" $speed_param >> "$LOG_FILE" 2>&1 &
+    # Ejecutar wallpaper en background para el monitor específico
+    nohup ./build/wallpin-wallpaper --monitor "$monitor" --fps "$fps" $speed_param $color_param $tolerance_param >> "$LOG_FILE" 2>&1 &
     
     # Guardar PID
     echo $! > "$pid_file"
@@ -176,12 +219,7 @@ start_monitor() {
     
     # Verificar que se inició correctamente
     if kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-        local success_msg="✅ WallPin iniciado correctamente en $monitor ($fps FPS"
-        if [[ -n "$speed" ]]; then
-            success_msg="$success_msg, $speed px/s)"
-        else
-            success_msg="$success_msg)"
-        fi
+        local success_msg="✅ WallPin iniciado correctamente en $monitor ($config_msg)"
         echo "$success_msg"
         echo "📄 Log: $LOG_FILE"
     else
@@ -195,6 +233,8 @@ start_monitor() {
 start_all() {
     local fps="$1"
     local speed="$2"
+    local color_mode="$3"
+    local color_tolerance="$4"
     echo "🚀 Iniciando WallPin en todos los monitores..."
     local monitors
     monitors=$(get_monitors)
@@ -205,7 +245,7 @@ start_all() {
     fi
     
     while IFS= read -r monitor; do
-        start_monitor "$monitor" "$fps" "$speed"
+        start_monitor "$monitor" "$fps" "$speed" "$color_mode" "$color_tolerance"
         sleep 1  # Pequeña pausa entre monitores
     done <<< "$monitors"
 }
@@ -254,18 +294,22 @@ restart_monitor() {
     local monitor="$1"
     local fps="$2"
     local speed="$3"
+    local color_mode="$4"
+    local color_tolerance="$5"
     stop_monitor "$monitor"
     sleep 1
-    start_monitor "$monitor" "$fps" "$speed"
+    start_monitor "$monitor" "$fps" "$speed" "$color_mode" "$color_tolerance"
 }
 
 # Función para reiniciar todos
 restart_all() {
     local fps="$1"
     local speed="$2"
+    local color_mode="$3"
+    local color_tolerance="$4"
     stop_all
     sleep 2
-    start_all "$fps" "$speed"
+    start_all "$fps" "$speed" "$color_mode" "$color_tolerance"
 }
 
 # Función para parsear argumentos con flags
@@ -275,6 +319,8 @@ parse_args() {
     
     local fps=""
     local speed=""
+    local color_mode=""
+    local color_tolerance=""
     local monitor=""
     local remaining_args=()
     
@@ -289,6 +335,14 @@ parse_args() {
                 speed="$2"
                 shift 2
                 ;;
+            -c|--color-mode)
+                color_mode="$2"
+                shift 2
+                ;;
+            -t|--color-tolerance)
+                color_tolerance="$2"
+                shift 2
+                ;;
             *)
                 remaining_args+=("$1")
                 shift
@@ -301,41 +355,47 @@ parse_args() {
         monitor="${remaining_args[0]}"
     fi
     
-    # Si no se especificó FPS/speed como flags, usar argumentos posicionales
+    # Si no se especificó FPS/speed/color como flags, usar argumentos posicionales
     if [[ -z "$fps" && "${#remaining_args[@]}" -gt 1 ]]; then
         fps="${remaining_args[1]}"
     fi
     if [[ -z "$speed" && "${#remaining_args[@]}" -gt 2 ]]; then
         speed="${remaining_args[2]}"
     fi
+    if [[ -z "$color_mode" && "${#remaining_args[@]}" -gt 3 ]]; then
+        color_mode="${remaining_args[3]}"
+    fi
+    if [[ -z "$color_tolerance" && "${#remaining_args[@]}" -gt 4 ]]; then
+        color_tolerance="${remaining_args[4]}"
+    fi
     
     # Ejecutar comando con argumentos parseados
     case "$command" in
         "start")
             if [[ -n "$monitor" ]]; then
-                start_monitor "$monitor" "$fps" "$speed"
+                start_monitor "$monitor" "$fps" "$speed" "$color_mode" "$color_tolerance"
             else
                 echo "❌ Error: Especifica un monitor"
-                echo "Uso: $0 start <monitor> [-f fps] [-s speed]"
+                echo "Uso: $0 start <monitor> [-f fps] [-s speed] [-c mode] [-t tolerance]"
                 echo "Monitores disponibles:"
                 get_monitors | sed 's/^/  /'
                 exit 1
             fi
             ;;
         "start-all")
-            start_all "$fps" "$speed"
+            start_all "$fps" "$speed" "$color_mode" "$color_tolerance"
             ;;
         "restart")
             if [[ -n "$monitor" ]]; then
-                restart_monitor "$monitor" "$fps" "$speed"
+                restart_monitor "$monitor" "$fps" "$speed" "$color_mode" "$color_tolerance"
             else
                 echo "❌ Error: Especifica un monitor"
-                echo "Uso: $0 restart <monitor> [-f fps] [-s speed]"
+                echo "Uso: $0 restart <monitor> [-f fps] [-s speed] [-c mode] [-t tolerance]"
                 exit 1
             fi
             ;;
         "restart-all")
-            restart_all "$fps" "$speed"
+            restart_all "$fps" "$speed" "$color_mode" "$color_tolerance"
             ;;
     esac
 }
