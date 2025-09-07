@@ -30,6 +30,10 @@ typedef enum {
 
 // Funciones principales
 Color extract_dominant_color(const char *image_path);
+Color extract_color_imagemagick(const char *image_path);
+Color extract_color_native(const char *image_path);
+void force_native_mode(gboolean force);
+gboolean check_imagemagick_available(void);
 void rgb_to_hsl(int r, int g, int b, double *h, double *s, double *l);
 char* get_color_name(Color color);
 ColorGroup* create_color_group(Color color);

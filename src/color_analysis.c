@@ -2,6 +2,19 @@
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
+
+// Variable global para cachear si ImageMagick está disponible
+static int imagemagick_available = -1; // -1 = no chequeado, 0 = no disponible, 1 = disponible
+static gboolean force_native = FALSE;  // Forzar método nativo para pruebas
+
+// Forzar uso del método nativo (para comparaciones)
+void force_native_mode(gboolean force) {
+    force_native = force;
+    if (force) {
+        g_print("🔧 Forzando modo nativo para comparación\n");
+    }
+}
 
 // Convertir RGB a HSL
 void rgb_to_hsl(int r, int g, int b, double *h, double *s, double *l) {
@@ -36,6 +49,119 @@ void rgb_to_hsl(int r, int g, int b, double *h, double *s, double *l) {
             *h = 60 * (((rd - gd) / delta) + 4);
         }
     }
+}
+
+// Verificar si ImageMagick está disponible
+gboolean check_imagemagick_available(void) {
+    if (imagemagick_available == -1) {
+        // Intentar ejecutar 'convert -version' para verificar ImageMagick
+        int result = system("convert -version >/dev/null 2>&1");
+        imagemagick_available = (result == 0) ? 1 : 0;
+        
+        if (imagemagick_available) {
+            g_print("🎨 ImageMagick detectado: usando análisis de color avanzado\n");
+        } else {
+            g_print("⚠️  ImageMagick no encontrado: usando análisis de color nativo\n");
+        }
+    }
+    return imagemagick_available == 1;
+}
+
+// Parsear color desde formato hex (#RRGGBB)
+Color parse_hex_color(const char *hex_str) {
+    Color color = {128, 128, 128, 0, 0, 0.5}; // Color por defecto
+    
+    if (hex_str && strlen(hex_str) >= 7 && hex_str[0] == '#') {
+        unsigned int hex_val;
+        if (sscanf(hex_str + 1, "%06x", &hex_val) == 1) {
+            color.r = (hex_val >> 16) & 0xFF;
+            color.g = (hex_val >> 8) & 0xFF;
+            color.b = hex_val & 0xFF;
+            
+            // Calcular HSL
+            rgb_to_hsl(color.r, color.g, color.b, &color.hue, &color.saturation, &color.lightness);
+        }
+    }
+    
+    return color;
+}
+
+// Extraer color dominante usando ImageMagick
+Color extract_color_imagemagick(const char *image_path) {
+    Color default_color = {128, 128, 128, 0, 0, 0.5};
+    FILE *pipe;
+    char command[1024];
+    char line[256];
+    Color best_color = default_color;
+    int max_count = 0;
+    
+    // Comando ImageMagick para obtener histograma de colores
+    // -resize 100x100! = redimensionar a 100x100 (! ignora aspect ratio)
+    // -colors 16 = reducir a 16 colores principales  
+    // -depth 8 = profundidad de color 8 bits
+    // +dither = sin dithering para colores más puros
+    // histogram:info:- = generar histograma en formato texto
+    snprintf(command, sizeof(command), 
+             "convert \"%s\" -resize 100x100! -colors 16 -depth 8 +dither histogram:info:- 2>/dev/null", 
+             image_path);
+    
+    pipe = popen(command, "r");
+    if (!pipe) {
+        g_warning("Error ejecutando ImageMagick para %s", image_path);
+        return default_color;
+    }
+    
+    // Parsear la salida del histograma
+    // Formato: "  count: (r,g,b) #RRGGBB color_name"
+    while (fgets(line, sizeof(line), pipe)) {
+        int count, r, g, b;
+        char hex_color[8];
+        
+        // Buscar líneas con el formato del histograma
+        if (sscanf(line, "%d: (%d,%d,%d) %7s", &count, &r, &g, &b, hex_color) == 5) {
+            // Ignorar colores muy oscuros o muy claros que pueden ser ruido
+            double luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+            if (luminance < 15 || luminance > 240) continue;
+            
+            // Buscar el color con más frecuencia
+            if (count > max_count) {
+                max_count = count;
+                best_color.r = r;
+                best_color.g = g;
+                best_color.b = b;
+                rgb_to_hsl(r, g, b, &best_color.hue, &best_color.saturation, &best_color.lightness);
+            }
+        }
+        // Formato alternativo más simple  
+        else if (sscanf(line, "%d: %7s", &count, hex_color) == 2) {
+            Color parsed = parse_hex_color(hex_color);
+            
+            // Ignorar colores muy oscuros o muy claros
+            if (parsed.lightness < 0.06 || parsed.lightness > 0.94) continue;
+            
+            if (count > max_count) {
+                max_count = count;
+                best_color = parsed;
+            }
+        }
+    }
+    
+    int result = pclose(pipe);
+    if (result != 0) {
+        g_warning("ImageMagick falló para %s, usando método nativo", image_path);
+        // Fallback al método nativo
+        GError *error = NULL;
+        GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file_at_scale(image_path, 100, 100, TRUE, &error);
+        if (error) {
+            g_error_free(error);
+            return default_color;
+        }
+        Color native_color = get_average_color(pixbuf);
+        g_object_unref(pixbuf);
+        return native_color;
+    }
+    
+    return best_color;
 }
 
 // Obtener color promedio de una imagen
@@ -78,8 +204,8 @@ Color get_average_color(GdkPixbuf *pixbuf) {
     return color;
 }
 
-// Extraer color dominante de una imagen
-Color extract_dominant_color(const char *image_path) {
+// Método nativo original (renombrado para claridad)
+Color extract_color_native(const char *image_path) {
     GError *error = NULL;
     Color default_color = {128, 128, 128, 0, 0, 0.5}; // Gris por defecto
     
@@ -96,6 +222,24 @@ Color extract_dominant_color(const char *image_path) {
     g_object_unref(pixbuf);
     
     return dominant_color;
+}
+
+// Función principal que decide qué método usar
+Color extract_dominant_color(const char *image_path) {
+    static gboolean first_run = TRUE;
+    
+    // En la primera ejecución, verificar ImageMagick
+    if (first_run) {
+        check_imagemagick_available();
+        first_run = FALSE;
+    }
+    
+    // Si se fuerza el modo nativo o ImageMagick no está disponible
+    if (force_native || imagemagick_available != 1) {
+        return extract_color_native(image_path);
+    } else {
+        return extract_color_imagemagick(image_path);
+    }
 }
 
 // Obtener nombre descriptivo del color
