@@ -53,11 +53,27 @@ void rgb_to_hsl(int r, int g, int b, double *h, double *s, double *l) {
 
 // Función para verificar si ImageMagick está disponible
 gboolean check_imagemagick_available() {
+    // Solo verificar una vez
+    if (imagemagick_available != -1) {
+        return imagemagick_available == 1;
+    }
+    
     // Probar magick primero (ImageMagick v7+), luego convert (v6)
     if (system("which magick > /dev/null 2>&1") == 0) {
+        imagemagick_available = 1;
+        g_print("🎨 ImageMagick detectado: usando análisis de color avanzado\n");
         return TRUE;
     }
-    return system("which convert > /dev/null 2>&1") == 0 ? TRUE : FALSE;
+    
+    if (system("which convert > /dev/null 2>&1") == 0) {
+        imagemagick_available = 1; 
+        g_print("🎨 ImageMagick detectado: usando análisis de color avanzado\n");
+        return TRUE;
+    }
+    
+    imagemagick_available = 0;
+    g_print("⚠️  ImageMagick no disponible: usando método nativo\n");
+    return FALSE;
 }
 
 // Parsear color desde formato hex (#RRGGBB)
