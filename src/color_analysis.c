@@ -51,20 +51,13 @@ void rgb_to_hsl(int r, int g, int b, double *h, double *s, double *l) {
     }
 }
 
-// Verificar si ImageMagick está disponible
-gboolean check_imagemagick_available(void) {
-    if (imagemagick_available == -1) {
-        // Intentar ejecutar 'convert -version' para verificar ImageMagick
-        int result = system("convert -version >/dev/null 2>&1");
-        imagemagick_available = (result == 0) ? 1 : 0;
-        
-        if (imagemagick_available) {
-            g_print("🎨 ImageMagick detectado: usando análisis de color avanzado\n");
-        } else {
-            g_print("⚠️  ImageMagick no encontrado: usando análisis de color nativo\n");
-        }
+// Función para verificar si ImageMagick está disponible
+gboolean check_imagemagick_available() {
+    // Probar magick primero (ImageMagick v7+), luego convert (v6)
+    if (system("which magick > /dev/null 2>&1") == 0) {
+        return TRUE;
     }
-    return imagemagick_available == 1;
+    return system("which convert > /dev/null 2>&1") == 0 ? TRUE : FALSE;
 }
 
 // Parsear color desde formato hex (#RRGGBB)
@@ -93,17 +86,24 @@ Color extract_color_imagemagick(const char *image_path) {
     char command[1024];
     char line[256];
     Color best_color = default_color;
-    int max_count = 0;
     
     // Comando ImageMagick para obtener histograma de colores
     // -resize 100x100! = redimensionar a 100x100 (! ignora aspect ratio)
     // -colors 16 = reducir a 16 colores principales  
     // -depth 8 = profundidad de color 8 bits
     // +dither = sin dithering para colores más puros
-    // histogram:info:- = generar histograma en formato texto
-    snprintf(command, sizeof(command), 
-             "convert \"%s\" -resize 100x100! -colors 16 -depth 8 +dither histogram:info:- 2>/dev/null", 
-             image_path);
+    // -format "%c" histogram:info: = generar histograma en formato texto
+    
+    // Usar magick (v7+) o convert (v6) según disponibilidad
+    if (system("which magick > /dev/null 2>&1") == 0) {
+        snprintf(command, sizeof(command), 
+                 "magick \"%s\" -resize 100x100! -colors 16 -depth 8 +dither -format \"%%c\" histogram:info: 2>/dev/null", 
+                 image_path);
+    } else {
+        snprintf(command, sizeof(command), 
+                 "convert \"%s\" -resize 100x100! -colors 16 -depth 8 +dither -format \"%%c\" histogram:info: 2>/dev/null", 
+                 image_path);
+    }
     
     pipe = popen(command, "r");
     if (!pipe) {
@@ -112,36 +112,38 @@ Color extract_color_imagemagick(const char *image_path) {
     }
     
     // Parsear la salida del histograma
-    // Formato: "  count: (r,g,b) #RRGGBB color_name"
+    // Formato: "  count: (r,g,b) #RRGGBB color_name"  
+    // Buscar el mejor color combinando frecuencia y saturación
+    double best_score = 0;
+    
     while (fgets(line, sizeof(line), pipe)) {
         int count, r, g, b;
         char hex_color[8];
         
         // Buscar líneas con el formato del histograma
         if (sscanf(line, "%d: (%d,%d,%d) %7s", &count, &r, &g, &b, hex_color) == 5) {
-            // Ignorar colores muy oscuros o muy claros que pueden ser ruido
+            // Calcular luminancia para filtrar ruido
             double luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+            
+            // Ignorar colores muy oscuros (< 15) o muy claros (> 240)
             if (luminance < 15 || luminance > 240) continue;
             
-            // Buscar el color con más frecuencia
-            if (count > max_count) {
-                max_count = count;
+            // Calcular HSL para obtener saturación
+            double hue, saturation, lightness;
+            rgb_to_hsl(r, g, b, &hue, &saturation, &lightness);
+            
+            // Score combinado: frecuencia normalizada + saturación (favorece colores vibrantes)
+            double normalized_freq = (double)count / 10000.0; // Normalizar frequencia
+            double score = normalized_freq + (saturation * 0.5); // Peso 50% a saturación
+            
+            if (score > best_score) {
+                best_score = score;
                 best_color.r = r;
                 best_color.g = g;
                 best_color.b = b;
-                rgb_to_hsl(r, g, b, &best_color.hue, &best_color.saturation, &best_color.lightness);
-            }
-        }
-        // Formato alternativo más simple  
-        else if (sscanf(line, "%d: %7s", &count, hex_color) == 2) {
-            Color parsed = parse_hex_color(hex_color);
-            
-            // Ignorar colores muy oscuros o muy claros
-            if (parsed.lightness < 0.06 || parsed.lightness > 0.94) continue;
-            
-            if (count > max_count) {
-                max_count = count;
-                best_color = parsed;
+                best_color.hue = hue;
+                best_color.saturation = saturation;
+                best_color.lightness = lightness;
             }
         }
     }
