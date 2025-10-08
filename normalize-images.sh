@@ -34,19 +34,19 @@ show_help() {
 # Función para crear backup
 create_backup() {
     if [ -d "$BACKUP_DIR" ]; then
-        echo -e "${YELLOW}⚠️  Backup de normalización ya existe${NC}"
+        echo -e "${YELLOW}Backup de normalización ya existe${NC}"
         read -p "¿Sobrescribir? (y/N): " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${RED}❌ Operación cancelada${NC}"
+            echo -e "${RED}Operación cancelada${NC}"
             exit 1
         fi
         rm -rf "$BACKUP_DIR"
     fi
     
-    echo -e "${BLUE}📦 Creando backup para normalización...${NC}"
+    echo -e "${BLUE}Creando backup para normalización...${NC}"
     cp -r "$ASSETS_DIR" "$BACKUP_DIR"
-    echo -e "${GREEN}✅ Backup creado en $BACKUP_DIR${NC}"
+    echo -e "${GREEN}Backup creado en $BACKUP_DIR${NC}"
 }
 
 # Función para obtener número de archivo
@@ -78,13 +78,13 @@ preview_changes() {
         ((counter++))
     done
     
-    echo -e "\n${BLUE}📊 Total de archivos: ${#images[@]}${NC}"
-    echo -e "${BLUE}🔄 Serán renumerados secuencialmente: wall_001 a wall_$(printf "%03d" ${#images[@]})${NC}"
+    echo -e "\n${BLUE}Total de archivos: ${#images[@]}${NC}"
+    echo -e "${BLUE}Serán renumerados secuencialmente: wall_001 a wall_$(printf "%03d" ${#images[@]})${NC}"
 }
 
 # Función principal de normalización
 normalize_images() {
-    echo -e "${BLUE}🎯 Normalizando nombres de archivos...${NC}"
+    echo -e "${BLUE}Normalizando nombres de archivos...${NC}"
     
     # Crear backup automáticamente
     create_backup
@@ -93,12 +93,12 @@ normalize_images() {
     local images=($(find "$ASSETS_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) | sort))
     local total=${#images[@]}
     
-    echo -e "${BLUE}📊 Total de imágenes: $total${NC}"
+    echo -e "${BLUE}Total de imágenes: $total${NC}"
     
     # Crear directorio temporal
     local temp_dir=$(mktemp -d)
     
-    echo -e "${BLUE}🔄 Renombrando archivos...${NC}"
+    echo -e "${BLUE}Renombrando archivos...${NC}"
     
     # Copiar con nombres normalizados
     local counter=1
@@ -121,7 +121,7 @@ normalize_images() {
     # Verificar que se copiaron todos los archivos
     local copied_count=$(ls "$temp_dir" | wc -l)
     if [ "$copied_count" -ne "$total" ]; then
-        echo -e "${RED}❌ Error: Se copiaron $copied_count archivos pero esperaba $total${NC}"
+        echo -e "${RED}Error: Se copiaron $copied_count archivos pero esperaba $total${NC}"
         rm -rf "$temp_dir"
         return 1
     fi
@@ -133,8 +133,8 @@ normalize_images() {
     
     # Verificación final
     local final_count=$(ls "$ASSETS_DIR" | wc -l)
-    echo -e "${GREEN}✅ Normalización completada${NC}"
-    echo -e "${BLUE}📈 Resumen:${NC}"
+    echo -e "${GREEN}Normalización completada${NC}"
+    echo -e "${BLUE}Resumen:${NC}"
     echo -e "   - Archivos originales: $total"
     echo -e "   - Archivos finales: $final_count"
     echo -e "   - Formato: wall_001 a wall_$(printf "%03d" $final_count)"
@@ -144,19 +144,19 @@ normalize_images() {
 # Función para restaurar
 restore_backup() {
     if [ ! -d "$BACKUP_DIR" ]; then
-        echo -e "${RED}❌ No se encontró backup en $BACKUP_DIR${NC}"
+        echo -e "${RED} No se encontró backup en $BACKUP_DIR${NC}"
         exit 1
     fi
     
-    echo -e "${BLUE}🔄 Restaurando desde backup de normalización...${NC}"
+    echo -e "${BLUE} Restaurando desde backup de normalización...${NC}"
     rm -rf "$ASSETS_DIR"
     cp -r "$BACKUP_DIR" "$ASSETS_DIR"
-    echo -e "${GREEN}✅ Archivos restaurados${NC}"
+    echo -e "${GREEN} Archivos restaurados${NC}"
 }
 
 # Verificar directorio
 if [ ! -d "$ASSETS_DIR" ]; then
-    echo -e "${RED}❌ Error: No se encontró el directorio $ASSETS_DIR${NC}"
+    echo -e "${RED} Error: No se encontró el directorio $ASSETS_DIR${NC}"
     exit 1
 fi
 
@@ -177,11 +177,11 @@ case "${1:-help}" in
         show_help
         ;;
     *)
-        echo -e "${RED}❌ Opción no válida: $1${NC}"
+        echo -e "${RED} Opción no válida: $1${NC}"
         echo ""
         show_help
         exit 1
         ;;
 esac
 
-echo -e "\n${GREEN}🎉 ¡Operación completada!${NC}"
+echo -e "\n${GREEN} ¡Operación completada!${NC}"
