@@ -22,7 +22,7 @@ show_help() {
 # Función para verificar estado
 check_status() {
     if pgrep -f "wallpin-wallpaper" > /dev/null; then
-        echo "✅ WallPin wallpaper está ejecutándose (PID: $(pgrep -f wallpin-wallpaper))"
+        echo "WallPin wallpaper está ejecutándose (PID: $(pgrep -f wallpin-wallpaper))"
         return 0
     else
         echo "❌ WallPin wallpaper no está ejecutándose"
@@ -33,18 +33,18 @@ check_status() {
 # Función para iniciar wallpaper
 start_wallpaper() {
     if pgrep -f "wallpin-wallpaper" > /dev/null; then
-        echo "⚠️  WallPin ya está ejecutándose"
+        echo "WallPin ya está ejecutándose"
         return 1
     fi
     
-    echo "🚀 Iniciando WallPin wallpaper..."
+    echo "Iniciando WallPin wallpaper..."
     
     # Asegurar que usamos Wayland cuando sea posible
     export GDK_BACKEND=wayland
     
     # Cambiar al directorio correcto
     cd "$WALLPIN_DIR" || {
-        echo "❌ Error: No se pudo acceder al directorio $WALLPIN_DIR"
+        echo "Error: No se pudo acceder al directorio $WALLPIN_DIR"
         exit 1
     }
     
@@ -55,10 +55,10 @@ start_wallpaper() {
     sleep 2
     
     if pgrep -f "wallpin-wallpaper" > /dev/null; then
-        echo "✅ WallPin wallpaper iniciado correctamente"
-        echo "📄 Log: /tmp/wallpin.log"
+        echo "WallPin wallpaper iniciado correctamente"
+        echo "Log: /tmp/wallpin.log"
     else
-        echo "❌ Error al iniciar WallPin wallpaper"
+        echo "Error al iniciar WallPin wallpaper"
         echo "Ver log: /tmp/wallpin.log"
         return 1
     fi
@@ -67,22 +67,22 @@ start_wallpaper() {
 # Función para detener wallpaper
 stop_wallpaper() {
     if ! pgrep -f "wallpin-wallpaper" > /dev/null; then
-        echo "⚠️  WallPin wallpaper no está ejecutándose"
+        echo "WallPin wallpaper no está ejecutándose"
         return 1
     fi
     
-    echo "🛑 Deteniendo WallPin wallpaper..."
+    echo "Deteniendo WallPin wallpaper..."
     pkill -f "wallpin-wallpaper"
     
     # Esperar un momento
     sleep 1
     
     if ! pgrep -f "wallpin-wallpaper" > /dev/null; then
-        echo "✅ WallPin wallpaper detenido"
+        echo "WallPin wallpaper detenido"
     else
-        echo "⚠️  Forzando cierre..."
+        echo "Forzando cierre..."
         pkill -9 -f "wallpin-wallpaper"
-        echo "✅ WallPin wallpaper detenido (forzado)"
+        echo "WallPin wallpaper detenido (forzado)"
     fi
 }
 
@@ -95,7 +95,7 @@ restart_wallpaper() {
 
 # Función para modo ventana
 start_window() {
-    echo "🪟 Iniciando WallPin en modo ventana..."
+    echo "Iniciando WallPin en modo ventana..."
     cd "$WALLPIN_DIR" || exit 1
     "$WALLPIN_DIR/build/wallpin"
 }
