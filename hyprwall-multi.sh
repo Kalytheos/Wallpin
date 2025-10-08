@@ -70,7 +70,7 @@ show_help() {
 
 # Función para listar monitores
 list_monitors() {
-    echo "📺 Monitores disponibles:"
+    echo "Monitores disponibles:"
     hyprctl monitors | grep -E "Monitor|description:" | while read -r line; do
         if [[ $line == Monitor* ]]; then
             monitor_name=$(echo "$line" | awk '{print $2}')
@@ -90,10 +90,10 @@ check_monitor_status() {
     local pid_file="$PID_DIR/wallpin_${monitor}.pid"
     
     if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-        echo "✅ $monitor: WallPin ejecutándose (PID: $(cat "$pid_file"))"
+        echo "$monitor: WallPin ejecutándose (PID: $(cat "$pid_file"))"
         return 0
     else
-        echo "❌ $monitor: WallPin no está ejecutándose"
+        echo "$monitor: WallPin no está ejecutándose"
         [[ -f "$pid_file" ]] && rm -f "$pid_file"
         return 1
     fi
@@ -101,12 +101,12 @@ check_monitor_status() {
 
 # Función para verificar estado de todos los monitores
 check_status() {
-    echo "📊 Estado de WallPin en todos los monitores:"
+    echo "Estado de WallPin en todos los monitores:"
     local monitors
     monitors=$(get_monitors)
     
     if [[ -z "$monitors" ]]; then
-        echo "❌ No se detectaron monitores"
+        echo "No se detectaron monitores"
         return 1
     fi
     
@@ -131,7 +131,7 @@ start_monitor() {
     
     # Validar FPS
     if [[ ! "$fps" =~ ^[0-9]+$ ]] || [[ "$fps" -lt 30 ]] || [[ "$fps" -gt 500 ]]; then
-        echo "❌ Error: FPS debe ser un número entre 30 y 500. Usando $DEFAULT_FPS FPS"
+        echo "Error: FPS debe ser un número entre 30 y 500. Usando $DEFAULT_FPS FPS"
         fps="$DEFAULT_FPS"
     fi
     
@@ -145,11 +145,11 @@ start_monitor() {
             if [[ "$speed_int" -ge 10 ]] && [[ "$speed_int" -le 1000 ]]; then
                 speed_param="--speed $speed"
             else
-                echo "❌ Error: Velocidad debe ser un número entre 1.0 y 100.0. Usando velocidad por defecto"
+                echo "Error: Velocidad debe ser un número entre 1.0 y 100.0. Usando velocidad por defecto"
                 speed_param=""
             fi
         else
-            echo "❌ Error: Velocidad debe ser un número válido. Usando velocidad por defecto"
+            echo "Error: Velocidad debe ser un número válido. Usando velocidad por defecto"
             speed_param=""
         fi
     fi
@@ -164,35 +164,35 @@ start_monitor() {
                 if [[ "$color_tolerance" =~ ^[0-9]+$ ]] && [[ "$color_tolerance" -ge 10 ]] && [[ "$color_tolerance" -le 100 ]]; then
                     tolerance_param="--color-tolerance $color_tolerance"
                 else
-                    echo "❌ Error: Tolerancia de color debe ser un número entre 10 y 100. Usando tolerancia por defecto"
+                    echo "Error: Tolerancia de color debe ser un número entre 10 y 100. Usando tolerancia por defecto"
                 fi
             fi
         else
-            echo "❌ Error: Modo de color debe ser un número entre 1 y 5. Ignorando modo de color"
+            echo "Error: Modo de color debe ser un número entre 1 y 5. Ignorando modo de color"
             color_param=""
         fi
     fi
     
     # Verificar si ya está ejecutándose
     if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-        echo "⚠️  WallPin ya está ejecutándose en $monitor"
+        echo "WallPin ya está ejecutándose en $monitor"
         return 1
     fi
     
-    echo "🚀 Iniciando WallPin en monitor: $monitor"
+    echo "Iniciando WallPin en monitor: $monitor"
     
     # Asegurar que usamos Wayland
     export GDK_BACKEND=wayland
     
     # Cambiar al directorio correcto
     cd "$WALLPIN_DIR" || {
-        echo "❌ Error: No se pudo acceder al directorio $WALLPIN_DIR"
+        echo " Error: No se pudo acceder al directorio $WALLPIN_DIR"
         exit 1
     }
     
     # Verificar que el ejecutable existe
     if [[ ! -x "build/wallpin-wallpaper" ]]; then
-        echo "❌ Error: No se encontró build/wallpin-wallpaper. Ejecuta 'make wallpaper' primero."
+        echo " Error: No se encontró build/wallpin-wallpaper. Ejecuta 'make wallpaper' primero."
         exit 1
     fi
     
@@ -219,11 +219,11 @@ start_monitor() {
     
     # Verificar que se inició correctamente
     if kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-        local success_msg="✅ WallPin iniciado correctamente en $monitor ($config_msg)"
+        local success_msg=" WallPin iniciado correctamente en $monitor ($config_msg)"
         echo "$success_msg"
-        echo "📄 Log: $LOG_FILE"
+        echo " Log: $LOG_FILE"
     else
-        echo "❌ Error al iniciar WallPin en $monitor"
+        echo "Error al iniciar WallPin en $monitor"
         rm -f "$pid_file"
         return 1
     fi
@@ -235,12 +235,12 @@ start_all() {
     local speed="$2"
     local color_mode="$3"
     local color_tolerance="$4"
-    echo "🚀 Iniciando WallPin en todos los monitores..."
+    echo " Iniciando WallPin en todos los monitores..."
     local monitors
     monitors=$(get_monitors)
     
     if [[ -z "$monitors" ]]; then
-        echo "❌ No se detectaron monitores"
+        echo " No se detectaron monitores"
         return 1
     fi
     
@@ -255,25 +255,25 @@ stop_monitor() {
     local monitor="$1"
     local pid_file="$PID_DIR/wallpin_${monitor}.pid"
     
-    echo "🛑 Deteniendo WallPin en monitor: $monitor"
+    echo "Deteniendo WallPin en monitor: $monitor"
     
     if [[ -f "$pid_file" ]]; then
         local pid
         pid=$(cat "$pid_file")
         if kill "$pid" 2>/dev/null; then
-            echo "✅ WallPin detenido en $monitor"
+            echo " WallPin detenido en $monitor"
         else
-            echo "⚠️  Proceso no encontrado, limpiando PID file"
+            echo "  Proceso no encontrado, limpiando PID file"
         fi
         rm -f "$pid_file"
     else
-        echo "❌ WallPin no estaba ejecutándose en $monitor"
+        echo " WallPin no estaba ejecutándose en $monitor"
     fi
 }
 
 # Función para detener todos los wallpapers
 stop_all() {
-    echo "🛑 Deteniendo WallPin en todos los monitores..."
+    echo "Deteniendo WallPin en todos los monitores..."
     
     # Detener por PID files
     for pid_file in "$PID_DIR"/wallpin_*.pid; do
@@ -286,7 +286,7 @@ stop_all() {
     
     # Cleanup adicional por si acaso
     pkill -f "wallpin-wallpaper" 2>/dev/null || true
-    echo "✅ Todos los WallPin wallpapers detenidos"
+    echo " Todos los WallPin wallpapers detenidos"
 }
 
 # Función para reiniciar un monitor
@@ -375,7 +375,7 @@ parse_args() {
             if [[ -n "$monitor" ]]; then
                 start_monitor "$monitor" "$fps" "$speed" "$color_mode" "$color_tolerance"
             else
-                echo "❌ Error: Especifica un monitor"
+                echo " Error: Especifica un monitor"
                 echo "Uso: $0 start <monitor> [-f fps] [-s speed] [-c mode] [-t tolerance]"
                 echo "Monitores disponibles:"
                 get_monitors | sed 's/^/  /'
@@ -389,7 +389,7 @@ parse_args() {
             if [[ -n "$monitor" ]]; then
                 restart_monitor "$monitor" "$fps" "$speed" "$color_mode" "$color_tolerance"
             else
-                echo "❌ Error: Especifica un monitor"
+                echo " Error: Especifica un monitor"
                 echo "Uso: $0 restart <monitor> [-f fps] [-s speed] [-c mode] [-t tolerance]"
                 exit 1
             fi
@@ -412,7 +412,7 @@ case "$1" in
         if [[ -n "$2" ]]; then
             stop_monitor "$2"
         else
-            echo "❌ Error: Especifica un monitor"
+            echo " Error: Especifica un monitor"
             echo "Uso: $0 stop <monitor>"
             exit 1
         fi
@@ -436,7 +436,7 @@ case "$1" in
         show_help
         ;;
     *)
-        echo "❌ Comando no reconocido: $1"
+        echo " Comando no reconocido: $1"
         show_help
         exit 1
         ;;
