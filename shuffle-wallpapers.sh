@@ -42,32 +42,32 @@ show_help() {
 # Función para crear backup
 create_backup() {
     if [ -d "$BACKUP_DIR" ]; then
-        echo -e "${YELLOW}⚠️  Backup ya existe en $BACKUP_DIR${NC}"
+        echo -e "${YELLOW}  Backup ya existe en $BACKUP_DIR${NC}"
         read -p "¿Sobrescribir backup existente? (y/N): " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${RED}❌ Operación cancelada${NC}"
+            echo -e "${RED} Operación cancelada${NC}"
             exit 1
         fi
         rm -rf "$BACKUP_DIR"
     fi
     
-    echo -e "${BLUE}📦 Creando backup...${NC}"
+    echo -e "${BLUE} Creando backup...${NC}"
     cp -r "$ASSETS_DIR" "$BACKUP_DIR"
-    echo -e "${GREEN}✅ Backup creado en $BACKUP_DIR${NC}"
+    echo -e "${GREEN} Backup creado en $BACKUP_DIR${NC}"
 }
 
 # Función para restaurar backup
 restore_backup() {
     if [ ! -d "$BACKUP_DIR" ]; then
-        echo -e "${RED}❌ No se encontró backup en $BACKUP_DIR${NC}"
+        echo -e "${RED} No se encontró backup en $BACKUP_DIR${NC}"
         exit 1
     fi
     
-    echo -e "${BLUE}🔄 Restaurando desde backup...${NC}"
+    echo -e "${BLUE} Restaurando desde backup...${NC}"
     rm -rf "$ASSETS_DIR"
     cp -r "$BACKUP_DIR" "$ASSETS_DIR"
-    echo -e "${GREEN}✅ Imágenes restauradas al orden original${NC}"
+    echo -e "${GREEN} Imágenes restauradas al orden original${NC}"
 }
 
 # Función para obtener lista de imágenes ordenada
@@ -137,7 +137,7 @@ generate_new_name() {
 reorganize_images() {
     local strategy="$1"
     
-    echo -e "${BLUE}🎯 Aplicando estrategia: $strategy${NC}"
+    echo -e "${BLUE} Aplicando estrategia: $strategy${NC}"
     
     # Crear backup automáticamente
     create_backup
@@ -146,12 +146,12 @@ reorganize_images() {
     local images=($(get_image_list))
     local total=${#images[@]}
     
-    echo -e "${BLUE}📊 Total de imágenes: $total${NC}"
+    echo -e "${BLUE} Total de imágenes: $total${NC}"
     
     # Crear directorio temporal
     local temp_dir=$(mktemp -d)
     
-    echo -e "${BLUE}🔄 Reorganizando imágenes...${NC}"
+    echo -e "${BLUE} Reorganizando imágenes...${NC}"
     
     # Crear array de nuevos índices según estrategia
     local new_indices=()
@@ -220,7 +220,7 @@ reorganize_images() {
         
         # Verificar que new_index no esté vacío
         if [ -z "$new_index" ] || [ "$new_index" -eq 0 ]; then
-            echo -e "${RED}❌ Error: Índice inválido para archivo $basename (índice: '$new_index')${NC}"
+            echo -e "${RED} Error: Índice inválido para archivo $basename (índice: '$new_index')${NC}"
             rm -rf "$temp_dir"
             return 1
         fi
@@ -230,7 +230,7 @@ reorganize_images() {
         
         # Verificar que no exista ya un archivo con ese nombre en temporal
         if [ -f "$new_path" ]; then
-            echo -e "${RED}❌ Error: Archivo duplicado detectado: $new_name${NC}"
+            echo -e "${RED} Error: Archivo duplicado detectado: $new_name${NC}"
             echo -e "${YELLOW}   Archivo original: $basename → Nuevo: $new_name${NC}"
             rm -rf "$temp_dir"
             return 1
@@ -247,8 +247,8 @@ reorganize_images() {
     # Verificar que se copiaron todos los archivos
     local copied_count=$(ls "$temp_dir" | wc -l)
     if [ "$copied_count" -ne "$total" ]; then
-        echo -e "${RED}❌ Error: Se copiaron $copied_count archivos pero esperaba $total${NC}"
-        echo -e "${YELLOW}🔄 Limpiando directorio temporal y abortando...${NC}"
+        echo -e "${RED} Error: Se copiaron $copied_count archivos pero esperaba $total${NC}"
+        echo -e "${YELLOW} Limpiando directorio temporal y abortando...${NC}"
         rm -rf "$temp_dir"
         return 1
     fi
@@ -260,44 +260,44 @@ reorganize_images() {
     
     # Verificación final
     local final_count=$(ls "$ASSETS_DIR" | wc -l)
-    echo -e "${GREEN}✅ Reorganización completada${NC}"
-    echo -e "${BLUE}📈 Resumen:${NC}"
+    echo -e "${GREEN} Reorganización completada${NC}"
+    echo -e "${BLUE} Resumen:${NC}"
     echo -e "   - Estrategia: $strategy"
     echo -e "   - Imágenes originales: $total"
     echo -e "   - Imágenes finales: $final_count"
     echo -e "   - Backup disponible en: $BACKUP_DIR"
     
     if [ "$final_count" -ne "$total" ]; then
-        echo -e "${YELLOW}⚠️  Advertencia: El número final de archivos no coincide${NC}"
+        echo -e "${YELLOW}  Advertencia: El número final de archivos no coincide${NC}"
     fi
 }
 
 # Verificar que estamos en el directorio correcto
 if [ ! -d "$ASSETS_DIR" ]; then
-    echo -e "${RED}❌ Error: No se encontró el directorio $ASSETS_DIR${NC}"
-    echo -e "${YELLOW}💡 Ejecuta este script desde el directorio raíz de WallPin${NC}"
+    echo -e "${RED} Error: No se encontró el directorio $ASSETS_DIR${NC}"
+    echo -e "${YELLOW} Ejecuta este script desde el directorio raíz de WallPin${NC}"
     exit 1
 fi
 
 # Procesar argumentos
 case "${1:-help}" in
     "reverse")
-        echo -e "${GREEN}🔄 Modo: Inverso${NC}"
+        echo -e "${GREEN}Modo: Inverso${NC}"
         echo -e "Las primeras imágenes serán las últimas y viceversa"
         reorganize_images "reverse"
         ;;
     "random")
-        echo -e "${GREEN}🎲 Modo: Aleatorio${NC}"
+        echo -e "${GREEN}Modo: Aleatorio${NC}"
         echo -e "Orden aleatorio reproducible (basado en fecha actual)"
         reorganize_images "random"
         ;;
     "chunks")
-        echo -e "${GREEN}📦 Modo: Bloques${NC}"
+        echo -e "${GREEN}Modo: Bloques${NC}"
         echo -e "Intercambia bloques de 50 imágenes"
         reorganize_images "chunks"
         ;;
     "interleave")
-        echo -e "${GREEN}🔀 Modo: Entrelazado${NC}"
+        echo -e "${GREEN}Modo: Entrelazado${NC}"
         echo -e "Alterna imágenes pares e impares"
         reorganize_images "interleave"
         ;;
@@ -311,12 +311,12 @@ case "${1:-help}" in
         show_help
         ;;
     *)
-        echo -e "${RED}❌ Opción no válida: $1${NC}"
+        echo -e "${RED} Opción no válida: $1${NC}"
         echo ""
         show_help
         exit 1
         ;;
 esac
 
-echo -e "\n${GREEN}🎉 ¡Operación completada!${NC}"
-echo -e "${BLUE}💡 Tip: Ejecuta './shuffle-wallpapers.sh restore' para volver al orden original${NC}"
+echo -e "\n${GREEN} ¡Operación completada!${NC}"
+echo -e "${BLUE} Tip: Ejecuta './shuffle-wallpapers.sh restore' para volver al orden original${NC}"
