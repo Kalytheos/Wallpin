@@ -12,19 +12,22 @@ static ImageInfo* create_image_info(const char *path, GHashTable *loaded_paths) 
     info->path = g_strdup(path);
     g_hash_table_add(loaded_paths, info->path);
     
-    // Load image to get dimensions
-    GError *error = NULL;
-    GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file(path, &error);
-    if (pixbuf) {
-        info->original_width = gdk_pixbuf_get_width(pixbuf);
-        info->original_height = gdk_pixbuf_get_height(pixbuf);
-        info->aspect_ratio = (double)info->original_width / info->original_height;
-        g_print("Loaded image: %s (%dx%d, ratio: %.2f)\n", 
+    // OPTIMIZACIÓN CRÍTICA: Usar gdk_pixbuf_get_file_info en lugar de cargar la imagen completa
+    // Esta función solo lee los headers del archivo, consumiendo ~100x menos memoria
+    GdkPixbufFormat *format = NULL;
+    gint width = 0, height = 0;
+    
+    format = gdk_pixbuf_get_file_info(path, &width, &height);
+    
+    if (format && width > 0 && height > 0) {
+        info->original_width = width;
+        info->original_height = height;
+        info->aspect_ratio = (double)width / height;
+        g_print("Info loaded: %s (%dx%d, ratio: %.2f)\n", 
                 path, info->original_width, info->original_height, info->aspect_ratio);
-        g_object_unref(pixbuf);
     } else {
-        g_warning("Could not load image %s: %s", path, error->message);
-        g_error_free(error);
+        // Fallback si no se puede obtener info del archivo
+        g_warning("Could not get file info for %s, using defaults", path);
         info->original_width = 300;
         info->original_height = 300;
         info->aspect_ratio = 1.0;

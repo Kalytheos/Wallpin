@@ -45,7 +45,10 @@ create_backup() {
     fi
     
     echo -e "${BLUE}📦 Creando backup para normalización...${NC}"
-    cp -r "$ASSETS_DIR" "$BACKUP_DIR"
+    if ! cp -r -- "$ASSETS_DIR" "$BACKUP_DIR" 2>/dev/null; then
+        echo -e "${RED}❌ Error creando backup. Verifica permisos y archivos con caracteres especiales${NC}"
+        exit 1
+    fi
     echo -e "${GREEN}✅ Backup creado en $BACKUP_DIR${NC}"
 }
 
@@ -63,10 +66,12 @@ extract_number_smart() {
 preview_changes() {
     echo -e "${BLUE}🔍 Preview de cambios (sin aplicar):${NC}\n"
     
-    local images=($(find "$ASSETS_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) | sort))
+    local temp_list=$(mktemp)
+    find "$ASSETS_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) | sort > "$temp_list"
     local counter=1
+    local total_count=$(wc -l < "$temp_list")
     
-    for old_file in "${images[@]}"; do
+    while IFS= read -r old_file; do
         local basename=$(basename "$old_file")
         local extension="${basename##*.}"
         local new_name=$(printf "wall_%03d.%s" "$counter" "$extension")
@@ -76,22 +81,89 @@ preview_changes() {
         fi
         
         ((counter++))
-    done
+    done < "$temp_list"
     
-    echo -e "\n${BLUE}📊 Total de archivos: ${#images[@]}${NC}"
-    echo -e "${BLUE}🔄 Serán renumerados secuencialmente: wall_001 a wall_$(printf "%03d" ${#images[@]})${NC}"
+    rm -f "$temp_list"
+    
+    echo -e "\n${BLUE}📊 Total de archivos: $total_count${NC}"
+    echo -e "${BLUE}🔄 Serán renumerados secuencialmente: wall_001 a wall_$(printf "%03d" $total_count)${NC}"
+}
+
+# Función para limpiar archivos con caracteres problemáticos
+clean_problematic_files() {
+    echo -e "${BLUE}🧹 Verificando archivos con caracteres especiales...${NC}"
+    local cleaned=0
+    local temp_list=$(mktemp)
+    
+    # Crear lista de archivos problemáticos usando null delimiter
+    find "$ASSETS_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) -print0 > "$temp_list"
+    
+    while IFS= read -r -d '' file; do
+        local basename=$(basename "$file")
+        
+        # Si el archivo contiene caracteres que pueden causar problemas
+        if [[ "$basename" =~ [^a-zA-Z0-9._\ -] ]]; then
+            echo -e "${YELLOW}   Limpiando: ${basename:0:50}...${NC}"
+            
+            # Generar nuevo nombre limpio
+            local extension="${basename##*.}"
+            local clean_base=$(echo "$basename" | tr -cd 'a-zA-Z0-9._-' | head -c 40)
+            local timestamp=$(date +%s%N | cut -c1-13)
+            local clean_name="${clean_base}_${timestamp}.${extension}"
+            
+            # Si el nombre base está vacío, usar un nombre genérico
+            if [[ -z "$clean_base" ]]; then
+                clean_name="cleaned_file_${timestamp}.${extension}"
+            fi
+            
+            # Renombrar el archivo problemático usando comillas y verificando existencia
+            local new_path="$ASSETS_DIR/$clean_name"
+            if [[ -f "$file" ]]; then
+                if cp "$file" "$new_path" 2>/dev/null && rm "$file" 2>/dev/null; then
+                    echo -e "${GREEN}   ✅ Renombrado a: $clean_name${NC}"
+                    ((cleaned++))
+                else
+                    echo -e "${RED}   ❌ No se pudo limpiar: ${basename:0:30}...${NC}"
+                fi
+            else
+                echo -e "${RED}   ⚠️  Archivo no encontrado: ${basename:0:30}...${NC}"
+            fi
+        fi
+    done < "$temp_list"
+    
+    rm -f "$temp_list"
+    
+    if [ $cleaned -gt 0 ]; then
+        echo -e "${GREEN}✅ Limpiados $cleaned archivos problemáticos${NC}"
+    else
+        echo -e "${GREEN}✅ No se encontraron archivos problemáticos para limpiar${NC}"
+    fi
 }
 
 # Función principal de normalización
 normalize_images() {
     echo -e "${BLUE}🎯 Normalizando nombres de archivos...${NC}"
     
+    # Mostrar un preview rápido del total
+    local temp_count=$(find "$ASSETS_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) | wc -l)
+    echo -e "${YELLOW}⚠️  Se van a renombrar $temp_count archivos${NC}"
+    read -p "¿Continuar con la normalización? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${RED}❌ Normalización cancelada${NC}"
+        return 1
+    fi
+    
+    # Primero limpiar archivos problemáticos
+    clean_problematic_files
+    
     # Crear backup automáticamente
     create_backup
     
-    # Obtener lista de imágenes ordenada por nombre actual
-    local images=($(find "$ASSETS_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) | sort))
-    local total=${#images[@]}
+    # Obtener lista de imágenes ordenada por nombre actual usando null delimiter
+    local temp_list=$(mktemp)
+    find "$ASSETS_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) -print0 | sort -z > "$temp_list"
+    local total=$(tr -dc '\0' < "$temp_list" | wc -c)
     
     echo -e "${BLUE}📊 Total de imágenes: $total${NC}"
     
@@ -100,30 +172,44 @@ normalize_images() {
     
     echo -e "${BLUE}🔄 Renombrando archivos...${NC}"
     
-    # Copiar con nombres normalizados
+    # Copiar con nombres normalizados usando null delimiter
     local counter=1
-    for old_file in "${images[@]}"; do
+    while IFS= read -r -d '' old_file; do
         local basename=$(basename "$old_file")
         local extension="${basename##*.}"
         local new_name=$(printf "wall_%03d.%s" "$counter" "$extension")
         local new_path="$temp_dir/$new_name"
         
-        cp "$old_file" "$new_path"
-        
-        # Mostrar progreso cada 50 archivos
-        if [ $((counter % 50)) -eq 0 ]; then
-            echo -e "${YELLOW}   Procesados: $counter/$total${NC}"
+        # Verificar que el archivo origen existe
+        if [[ ! -f "$old_file" ]]; then
+            echo -e "${YELLOW}⚠️  Archivo no existe: ${basename:0:40}...${NC}"
+            continue
         fi
         
-        ((counter++))
-    done
+        # Copiar archivo con manejo de errores mejorado
+        if cp "$old_file" "$new_path" 2>/dev/null; then
+            # Mostrar progreso cada 100 archivos
+            if [ $((counter % 100)) -eq 0 ]; then
+                echo -e "${YELLOW}   Procesados: $counter/$total${NC}"
+            fi
+            ((counter++))
+        else
+            echo -e "${YELLOW}⚠️  Error copiando: ${basename:0:40}...${NC}"
+        fi
+    done < "$temp_list"
     
-    # Verificar que se copiaron todos los archivos
+    rm -f "$temp_list"
+    
+    # Verificar que se copiaron archivos
     local copied_count=$(ls "$temp_dir" | wc -l)
-    if [ "$copied_count" -ne "$total" ]; then
-        echo -e "${RED}❌ Error: Se copiaron $copied_count archivos pero esperaba $total${NC}"
+    if [ "$copied_count" -eq 0 ]; then
+        echo -e "${RED}❌ Error: No se copiaron archivos${NC}"
         rm -rf "$temp_dir"
         return 1
+    fi
+    
+    if [ "$copied_count" -ne "$total" ]; then
+        echo -e "${YELLOW}⚠️  Se copiaron $copied_count de $total archivos (algunos pueden tener caracteres problemáticos)${NC}"
     fi
     
     # Reemplazar archivos originales

@@ -182,9 +182,17 @@ static void load_images_from_directory(GtkBox *container, const char *dir_path) 
 
 static GtkWidget *create_rounded_image(const char *image_path, int target_width, int target_height) {
     GError *error = NULL;
+    GdkTexture *texture = NULL;
     
-    // Cargar la imagen completa
-    GdkPixbuf *original_pixbuf = gdk_pixbuf_new_from_file(image_path, &error);
+    // OPTIMIZACIÓN: Cargar directamente desde archivo escalado para reducir memoria
+    // En lugar de cargar imagen completa, usar gdk_pixbuf_new_from_file_at_scale
+    GdkPixbuf *scaled_pixbuf = gdk_pixbuf_new_from_file_at_scale(
+        image_path,
+        target_width,
+        target_height,
+        FALSE,  // No preservar aspect ratio exacto, usar dimensiones solicitadas
+        &error
+    );
     
     if (error) {
         g_warning("Error loading image %s: %s", image_path, error->message);
@@ -192,20 +200,23 @@ static GtkWidget *create_rounded_image(const char *image_path, int target_width,
         return gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     }
 
-    // Escalar la imagen
-    GdkPixbuf *scaled_pixbuf = gdk_pixbuf_scale_simple(original_pixbuf, 
-                                                        target_width, 
-                                                        target_height,
-                                                        GDK_INTERP_BILINEAR);
+    // CRÍTICO: Crear texture desde pixbuf
+    // Nota: gdk_texture_new_for_pixbuf está deprecated en GTK 4.12+
+    // pero es la única forma de crear texture desde pixbuf escalado
+    // La alternativa gdk_texture_new_from_file no permite escalar
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+    texture = gdk_texture_new_for_pixbuf(scaled_pixbuf);
+    G_GNUC_END_IGNORE_DEPRECATIONS
     
-    g_object_unref(original_pixbuf);
-
-    // Convertir a texture para GTK4
-    GdkTexture *texture = gdk_texture_new_for_pixbuf(scaled_pixbuf);
+    // CRÍTICO: Liberar pixbuf inmediatamente después de crear texture
+    // La texture hace su propia copia interna de los datos
     g_object_unref(scaled_pixbuf);
 
     // Crear GtkPicture con el texture
     GtkWidget *picture = gtk_picture_new_for_paintable(GDK_PAINTABLE(texture));
+    
+    // CRÍTICO: Liberar texture después de asignarla al picture
+    // GtkPicture incrementa el reference count internamente
     g_object_unref(texture);
 
     // Configurar las propiedades del picture
